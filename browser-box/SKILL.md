@@ -19,3 +19,12 @@ Use type `browser`. Choose a named instance for an isolated profile. Chromium pr
 Navigate with `"$BOXES_ROOT/box" agent browser NAME key ctrl+l`, send the URL with `text`, and press `Return`. Inspect a fresh screenshot after navigation. Do not enable a public CDP port. Use the stock desktop API unless the task explicitly requires a different integration.
 
 Read [the browser reference](README.md) for startup settings. Preserve the user's existing tabs, credentials, and downloads. Ask before external submissions or account changes.
+
+## Recording and lessons
+
+`"$BOXES_ROOT/box" record browser NAME start --overlay` records the page and logs
+the clicks, scrolls, and typing that drive it. Clicking a link, typing a URL into
+the address bar, and scrolling all arrive as events with their positions. Logins
+are the human's: ask them to sign in before the recording starts or while it is
+paused, and never read credentials out of a recording. A lesson for a flow here
+should name the page and the visible control rather than a coordinate.

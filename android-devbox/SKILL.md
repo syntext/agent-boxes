@@ -21,3 +21,10 @@ The desktop starts without an emulator. Stop it with `"$BOXES_ROOT/box" emu andr
 SDK and AVD data are private to `/config`. Never point a new instance at a legacy live writable SDK or AVD directory. Use a read-only seed and a private copy. SDK license acceptance is a legal decision. Do not pass `--accept-licenses` unless the user explicitly authorized that acceptance.
 
 Use `"$BOXES_ROOT/box" agent android NAME screenshot --output /absolute/path.png` for the shared desktop. Use adb for Android app commands. Verify that boot completed before installing or launching an app.
+
+## Recording and lessons
+
+`"$BOXES_ROOT/box" record android NAME start` records the emulator screen and logs
+input. The emulator window is one part of the desktop, so crop or reason about its
+region when reading frames. A recording does not replace the emulator lifecycle
+commands: start and stop the emulator explicitly before and after.

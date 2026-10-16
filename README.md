@@ -131,11 +131,62 @@ Input is asynchronous. Observe a fresh screenshot or app state before the next c
 
 The human and agent share one focus, pointer, and keyboard. An agent must pause on human takeover and wait for permission before resuming. There is no automatic ownership arbitration. Do not send conflicting input from multiple agents.
 
+## Recording and lessons
+
+A box can record its own desktop and the input that drives it, so a person can
+show an agent a task once and the agent can repeat it later.
+
+```sh
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" start [--fps 15] [--overlay]
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" pause
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" resume
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" stop
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" status
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" list
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" forget RECORDING
+"$BOXES_ROOT/box" lessons "$TYPE" list
+"$BOXES_ROOT/box" lessons "$TYPE" show SLUG
+"$BOXES_ROOT/box" lessons "$TYPE" path
+printf '%s' "# Title" | "$BOXES_ROOT/box" lessons "$TYPE" record SLUG
+```
+
+`start` records the screen and logs the clicks, drags, scrolls, and keystrokes the
+box's viewer sends, with their timestamps. `--overlay` also draws them on the live
+desktop while the person works. `pause` stops both the recorder and the input log,
+so nothing is captured while a secret is typed, and `resume` continues in a new
+segment. `stop` joins the segments, renders an annotated video with the clicks,
+drags, scrolls, and typed text drawn in, extracts the frames around each click and
+each scene change, and copies everything to
+`BOXES_DATA_DIR/recordings/<type>/<name>/<timestamp>/`. That directory then holds
+`screen.mp4`, `screen-annotated.mp4`, `events.jsonl`, `index.json`, `frames/`, and
+`recording.json`.
+
+Typed text is recorded in full. A recording therefore contains whatever was on the
+screen and whatever was typed, including anything private, so treat it as secret
+and never commit it. Nothing deletes a recording on its own; `forget` removes one
+that a person has asked to remove.
+
+The input log is read from the box's own viewer connection, so a person must work
+in that viewer's desktop. The tools need `ffmpeg` and `wf-recorder`, and the
+optional overlay needs `gir1.2-gtklayershell-0.1` and `python3-gi-cairo` for
+PyGObject's cairo binding. The shared defaults install all of them, so a box made
+before that change needs `recreate` or `update` first.
+
+Capturing the viewer's connection requires the container's root account, which
+boxes already has: the tap opens its capture socket as root and drops to the
+desktop account before it writes anything. It reads only the box's own loopback
+traffic and changes no upstream service.
+
+Lessons are Markdown files under `BOXES_DATA_DIR/lessons/<type>/`. They are shared
+by every box of that type, so a workflow learned in one box is available in the
+others. An agent loads them before a task, follows a matching one step by step,
+and drafts a new one for review after a recording.
+
 ## Type-specific setup and tools
 
 For the selected registry entry, open `README.md` in its `directory`. That reference covers the image, architecture, devices, storage, provisioning, and application commands. Its `SKILL.md` adds type-specific agent instructions.
 
-The shared defaults in [runtime.json](runtime.json) use the upstream `linuxserver/mods:universal-package-install` mod to install Mousepad and imv. The mod needs package-network access after recreation. A type can override those settings, for example when its image already includes the utilities. Use `box exec` or `box shell` for tools provided by the selected image. GUI execution uses the upstream Xwayland display `:0`. The CLI does not replace upstream service definitions or desktop menus.
+The shared defaults in [runtime.json](runtime.json) use the upstream `linuxserver/mods:universal-package-install` mod to install Mousepad, imv, and the recording tools ([Recording and lessons](#recording-and-lessons) lists them). The mod needs package-network access after recreation. A type can override those settings, for example when its image already includes the utilities. Use `box exec` or `box shell` for tools provided by the selected image. GUI execution uses the upstream Xwayland display `:0`. The CLI does not replace upstream service definitions or desktop menus.
 
 ## Security boundaries
 

@@ -74,7 +74,7 @@ class SkillPackagingTests(unittest.TestCase):
                 self.assertFalse((ROOT / relative).exists())
         cases = json.loads((ROOT / "tests/skill-evals/evals.json").read_text())
         self.assertEqual(cases["skill_name"], "boxes")
-        self.assertEqual([case["id"] for case in cases["evals"]], [1, 2, 3])
+        self.assertEqual([case["id"] for case in cases["evals"]], [1, 2, 3, 4])
         for case in cases["evals"]:
             self.assertIn("--password boxbox", case["expected_output"])
         for relative in SKILLS.values():

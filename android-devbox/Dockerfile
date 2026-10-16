@@ -6,6 +6,7 @@ RUN mkdir -p /usr/share/man/man1 && apt-get update && apt-get install -y --no-in
     libasound2t64 libxss1 libx11-xcb1 libxinerama1 libxkbcommon-x11-0 \
     libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
     libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 mousepad imv \
+    ffmpeg wf-recorder gir1.2-gtklayershell-0.1 python3-gi-cairo \
     && rm -rf /var/lib/apt/lists/*
 
 ARG CMDLINE_TOOLS_VERSION=15859902

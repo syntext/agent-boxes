@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-from . import agent, runtime
+from . import agent, recording, runtime
 from .model import BoxError, Instance, box_type, env_pair, host_bind, mount, registry, validate_mounts
 
 
@@ -15,10 +15,12 @@ def parser():
     commands = root.add_subparsers(dest="command", required=True)
     listing = commands.add_parser("list", help="List saved instances without credentials")
     listing.add_argument("--json", action="store_true")
+    usages = {"exec": "box exec TYPE [NAME] -- ARGS...", "adb": "box adb TYPE [NAME] -- ARGS...",
+              "record": "box record TYPE [NAME] {start,stop,pause,resume,status,list,forget}",
+              "lessons": "box lessons TYPE [NAME] {list,path,show,record}"}
     for command in ("up", "start", "stop", "restart", "update", "recreate", "status", "url", "login", "remove",
-                    "exec", "shell", "logs", "mount", "agent", "emu", "adb"):
-        p = commands.add_parser(command, **({"usage": f"box {command} TYPE [NAME] -- ARGS..."}
-                                           if command in {"exec", "adb"} else {}))
+                    "exec", "shell", "logs", "mount", "agent", "emu", "adb", "record", "lessons"):
+        p = commands.add_parser(command, usage=usages.get(command))
         p.add_argument("type", **({"nargs": "?"} if command == "status" else {}))
         p.add_argument("name", nargs="?", default="default")
         if command in {"up", "recreate", "update"}:
@@ -37,7 +39,7 @@ def parser():
         if command == "remove":
             p.add_argument("--purge", action="store_true")
             p.add_argument("--yes", action="store_true")
-        if command in {"exec", "adb", "emu", "agent", "mount"}:
+        if command in {"exec", "adb", "emu", "agent", "mount", "record", "lessons"}:
             p.add_argument("arguments", nargs=argparse.REMAINDER)
         if command == "logs":
             p.add_argument("--follow", action="store_true")
@@ -160,6 +162,49 @@ def control(instance, config, arguments):
     return agent.request(instance, config, "desktop/control", payload)
 
 
+def records(instance, config, arguments):
+    p = argparse.ArgumentParser(prog="box record TYPE [NAME]")
+    sub = p.add_subparsers(dest="operation", required=True)
+    start = sub.add_parser("start", help="Begin recording the desktop and logging input")
+    start.add_argument("--fps", type=int, default=15)
+    start.add_argument("--overlay", action="store_true",
+                       help="Also draw clicks, drags, scrolls, and typing on the live desktop")
+    for name in ("stop", "pause", "resume", "status", "list"):
+        sub.add_parser(name)
+    forget = sub.add_parser("forget", help="Delete one kept recording")
+    forget.add_argument("name")
+    args = p.parse_args(arguments)
+    if args.operation == "start":
+        if not 1 <= args.fps <= 60:
+            raise BoxError("--fps must be between 1 and 60.")
+        output(recording.start(instance, args.fps, args.overlay))
+    elif args.operation == "list":
+        output(recording.list_recordings(instance))
+    elif args.operation == "forget":
+        output(recording.forget(instance, args.name))
+    else:
+        output(getattr(recording, args.operation)(instance))
+
+
+def study(instance, config, arguments):
+    p = argparse.ArgumentParser(prog="box lessons TYPE [NAME]")
+    sub = p.add_subparsers(dest="operation", required=True)
+    for name in ("list", "path"):
+        sub.add_parser(name)
+    show = sub.add_parser("show")
+    show.add_argument("slug")
+    write = sub.add_parser("record", help="Save a lesson written to stdin")
+    write.add_argument("slug")
+    args = p.parse_args(arguments)
+    if args.operation == "record":
+        markdown = sys.stdin.read()
+        if not markdown.strip():
+            raise BoxError("A lesson needs Markdown on stdin.")
+        output(recording.record_lesson(instance, args.slug, markdown))
+    else:
+        output(recording.lessons(instance, args.operation, getattr(args, "slug", None)))
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     root = parser()
@@ -171,6 +216,8 @@ def main(argv=None):
             argv.insert(2, "default")
     default_actions = {
         "agent": {"state", "windows", "screenshot", "explore", "move", "click", "key", "text", "scroll", "control"},
+        "record": {"start", "stop", "pause", "resume", "status", "list", "forget"},
+        "lessons": {"list", "path", "show", "record"},
         "mount": {"list", "set", "remove"}, "emu": {"start", "stop", "status"}}
     explicit_name = len(argv) >= 4 and argv[3] == "--"
     if len(argv) >= 3 and not explicit_name and argv[2] in default_actions.get(argv[0], set()):
@@ -196,7 +243,7 @@ def main(argv=None):
         arguments = getattr(args, "arguments", [])
         if arguments[:1] == ["--"]:
             arguments = arguments[1:]
-        mutating = args.command in {"up", "start", "stop", "restart", "update", "recreate", "mount", "remove"}
+        mutating = args.command in {"up", "start", "stop", "restart", "update", "recreate", "mount", "remove", "record", "lessons"}
         with instance.lock() if mutating else contextlib.nullcontext():
             config = instance.load(create=args.command == "up")
             command = args.command
@@ -229,6 +276,10 @@ def main(argv=None):
                     runtime.run(["docker", command, "--timeout", "30", instance.project])
             elif command == "mount":
                 mounts(instance, config, arguments)
+            elif command == "record":
+                records(instance, config, arguments)
+            elif command == "lessons":
+                study(instance, config, arguments)
             elif command == "agent":
                 output(control(instance, config, arguments))
             elif command in {"exec", "shell", "emu", "adb"}:

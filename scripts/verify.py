@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--types", nargs="+", choices=["browser", "bambu", "android"], default=["browser", "bambu", "android"])
     parser.add_argument("--sdk-seed", type=Path)
     parser.add_argument("--viewer", action="store_true", help="Also render the shared desktop with agent-browser")
+    parser.add_argument("--recording", action="store_true",
+                        help="Also record a segment, drive input, and check the annotated output")
     parser.add_argument("--http", action="store_true", help="Verify boxes on the opt-in HTTP viewer port instead of the default HTTPS one")
     parser.add_argument("--keep-running", action="store_true")
     args = parser.parse_args()
@@ -80,6 +82,75 @@ def main():
     def inspect(kind, name="first"):
         project = box("status", kind, name, "--json")["project"]
         return json.loads(subprocess.check_output(["docker", "inspect", project]))[0]
+
+    def recording(kind, config, status):
+        """Record a segment, drive input as a viewer does, and inspect the result."""
+        container = status["project"]
+        subprocess.run(["docker", "cp", str(ROOT / "scripts/viewer_input.py"), f"{container}:/work/viewer-input.py"],
+                       check=True, capture_output=True)
+        started = box("record", kind, "first", "start", "--overlay")
+        check(f"{kind} recording starts under the recordings directory",
+              "/recordings/" in started["host"] and started["host"].startswith(environment["BOXES_DATA_DIR"]))
+        time.sleep(2)
+        running = subprocess.check_output(["docker", "exec", container, "sh", "-c",
+                                           'pgrep -f "overlay[.]py" | wc -l'], text=True).strip()
+        tools = subprocess.check_output(["docker", "exec", container, "sh", "-c",
+                                         "tail -n 300 /config/.boxes/tool.log"], text=True)
+        check(f"{kind} live overlay runs", running not in {"", "0"})
+        check(f"{kind} live overlay has no startup error",
+              "foreign struct converter" not in tools and "Traceback" not in tools)
+        send = ("python3", "/work/viewer-input.py", str(3000 if args.http else 3001), config["user"], config["password"])
+        box("exec", kind, "first", "--", *send, parse=False)
+        paused = box("record", kind, "first", "pause")
+        check(f"{kind} recording pauses", paused["paused"] is True)
+        box("exec", kind, "first", "--", *send, parse=False)
+        box("record", kind, "first", "resume")
+        box("exec", kind, "first", "--", *send, parse=False)
+        stopped = box("record", kind, "first", "stop")
+        check(f"{kind} recording captured input", stopped["events"] > 0)
+        check(f"{kind} pause split the recording into two segments", stopped["segments"] == 2)
+        check(f"{kind} recording kept its video",
+              Path(stopped["video"]).is_file() and Path(stopped["video"]).stat().st_size > 0)
+        check(f"{kind} recording annotated its video",
+              Path(stopped["annotated"]).is_file() and Path(stopped["annotated"]).stat().st_size > 0)
+        directory = Path(stopped["directory"])
+        index = json.loads((directory / "index.json").read_text())
+        check(f"{kind} recording indexed frames", len(index["frames"]) > 1)
+        check(f"{kind} recording is not black", (index.get("brightness") or 0) > 8)
+        highlights = (directory / "highlights.ass").read_text()
+        check(f"{kind} recording drew clicks and captions in",
+              "Dialogue: 10," in highlights and "Dialogue: 5," in highlights)
+        events = [value for value in (json.loads(line) for line in (directory / "events.jsonl").read_text().splitlines()
+                                      if line.strip()) if isinstance(value, dict)]
+        check(f"{kind} recording logged clicks and keys",
+              any(event.get("event") == "click" for event in events) and any(event.get("event") == "key" for event in events))
+        quiet, resumed = None, None
+        for event in events:
+            if event.get("event") == "stopped":
+                quiet = event["time"]
+            elif event.get("event") == "started" and quiet and not resumed:
+                resumed = event["time"]
+        if quiet and resumed:
+            inside = [event for event in events
+                      if isinstance(event.get("time"), (int, float)) and quiet < event["time"] < resumed
+                      and event.get("event") not in {"tap", "started", "stopped"}]
+            check(f"{kind} paused recording logged nothing", not inside)
+        else:
+            report["checks"].append({"name": f"{kind} paused recording logged nothing",
+                                     "skipped": "The pause boundary markers were absent from the event log."})
+        check(f"{kind} recording state holds no password",
+              "password" not in (directory / "recording.json").read_text())
+        lessons = box("lessons", kind, "first", "path")
+        check(f"{kind} lessons live under the data directory", lessons["directory"].startswith(environment["BOXES_DATA_DIR"]))
+        lesson = Path(lessons["directory"]) / "verify.md"
+        lesson.write_text("# Learned\n\nSteps.\n")
+        shown = box("lessons", kind, "first", "show", "verify")
+        check(f"{kind} lesson reads back through the CLI", "Steps." in shown["markdown"])
+        check(f"{kind} lesson appears in the list",
+              [item["slug"] for item in box("lessons", kind, "first", "list")["lessons"]] == ["verify"])
+        box("record", kind, "first", "forget", stopped["name"], parse=False)
+        check(f"{kind} forget removes only the named recording", not directory.exists())
+        lesson.unlink()
 
     def viewer(kind, config, status):
         session = environment["BOXES_PROJECT_PREFIX"] + "-" + kind
@@ -208,6 +279,8 @@ def main():
             else:
                 raise RuntimeError(f"{kind} actual terminal did not receive typed text and Return")
             check(f"{kind} typed text reached real terminal", result.stdout == f"boxes-{kind}-proof")
+            if args.recording:
+                recording(kind, config, status)
             again = box("up", kind, "first")
             check(f"{kind} up is idempotent", inspect(kind)["Id"] == initial["Id"] and again["port"] == status["port"])
             box("stop", kind, "first", parse=False)
