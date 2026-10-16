@@ -52,6 +52,14 @@ def identifier(value: str) -> str:
     return value
 
 
+def scheme(config: dict) -> str:
+    return "https" if config.get("https", True) else "http"
+
+
+def viewer_port(config: dict) -> int:
+    return 3001 if scheme(config) == "https" else 3000
+
+
 def atomic_json(path: Path, value: object) -> None:
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=".write-", dir=path.parent)
@@ -169,6 +177,7 @@ class Instance:
             if value.get("version") != 1 or value.get("type") != self.kind.name or value.get("name") != self.name:
                 raise BoxError(f"Invalid instance configuration {path}.")
             self.validate_data(Path(value["data"]))
+            value.setdefault("https", True)
             return value
         if not create:
             raise BoxError("Instance is not configured. Run box up first.")
@@ -178,7 +187,7 @@ class Instance:
                  "data": str(self.data), "bind": "0.0.0.0", "port": None,
                  "environment": {}, "mounts": [], "image": None,
                  "user": "box", "password": secrets.token_urlsafe(32),
-                 "tls_verify": False, "published_port": None}
+                 "tls_verify": False, "https": False, "published_port": None}
         self.save(value)
         return value
 
@@ -204,7 +213,7 @@ class Instance:
                    "container_name": self.project, "environment": environment,
                     "labels": self.labels,
                    "volumes": volumes,
-                   "ports": [{"target": 3001, "published": str(config["port"] or config["published_port"] or 0),
+                   "ports": [{"target": viewer_port(config), "published": str(config["port"] or config["published_port"] or 0),
                               "host_ip": config["bind"], "protocol": "tcp"}],
                    "restart": "unless-stopped"}
         if self.kind.build and not config["image"]:

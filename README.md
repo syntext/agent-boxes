@@ -80,7 +80,7 @@ BOXES_HOSTNAME=desktop-host "$BOXES_ROOT/box" up "$TYPE" "$NAME" --password boxb
 
 Replace the example address with an address assigned to your host, and `desktop-host` with its reachable hostname. `BOXES_HOSTNAME` changes displayed URLs only. `--bind` changes the Docker listener. For a remote loopback listener, use an SSH tunnel or a trusted authenticated reverse proxy. Do not publish the raw desktop to the public internet.
 
-The upstream certificate is self-signed. The local agent client explicitly skips certificate verification by default and does not use host HTTP proxies. `--tls-verify` enables the system trust store. It requires a certificate trusted by Python and valid for the bound address. Human browsers require the corresponding certificate trust or an explicit exception. Credentials never appear in URLs.
+The upstream certificate is self-signed. A new box serves plain HTTP, and `--https` switches it to the upstream HTTPS port. The agent client works over either scheme and does not use host HTTP proxies. Browsers only expose video and audio in a secure context, so `http://localhost` works while a hostname or private address does not: use `--https`, `--bind 127.0.0.1`, or a TLS-terminating proxy when a person needs the rendered desktop over the network. With `--https` the local agent client skips certificate verification by default; `--tls-verify` enables the system trust store and requires a certificate trusted by Python and valid for the bound address. Credentials never appear in URLs.
 
 ## Persistent configuration and mounts
 
@@ -88,9 +88,10 @@ Small state defaults to `${XDG_STATE_HOME:-~/.local/state}/boxes`. `BOXES_STATE_
 
 State and data paths must not overlap, including through symlinks or a saved data path. Boxes rejects equal or nested roots so purge cannot delete an instance's held lock.
 
-Each type and name has its own `/config`, `/work`, credentials, Compose project, and lock. The first host HTTPS port is selected from an available host port and saved before container creation. Docker receives an explicit binding so stop, start, restart, and recreation retain that port. If another process takes the port before Docker binds it, startup fails instead of silently selecting another port. An explicit occupied port also fails.
+Each type and name has its own `/config`, `/work`, credentials, Compose project, and lock. The first host port is selected from an available host port and saved before container creation. A box serves HTTP on internal port 3000 by default; `--https` publishes internal port 3001 instead, and `--no-https` returns it to HTTP. A box saved without a recorded scheme stays on HTTPS. Docker receives an explicit binding so stop, start, restart, and recreation retain that port. If another process takes the port before Docker binds it, startup fails instead of silently selecting another port. An explicit occupied port also fails.
 
 ```sh
+"$BOXES_ROOT/box" up "$TYPE" "$NAME" --password boxbox --https
 "$BOXES_ROOT/box" up "$TYPE" "$NAME" --password boxbox --workspace /absolute/project --env TZ=Europe/Amsterdam
 "$BOXES_ROOT/box" mount "$TYPE" "$NAME" set /absolute/reference /mnt/reference --mode ro
 "$BOXES_ROOT/box" mount "$TYPE" "$NAME" list
@@ -103,7 +104,7 @@ Each type and name has its own `/config`, `/work`, credentials, Compose project,
 
 Save app work before changing mounts or configuration. A change gracefully recreates a running desktop. Data directories are preserved, but unsaved application state is not. There is no atomic data rollback. Mount configuration is saved before reconciliation so a failed operation can be retried without repeating flags. Host directories are not recursively chowned. LinuxServer maps the desktop user through the caller's PUID and PGID.
 
-`--image IMAGE` saves an explicit image override and bypasses a registered build. `--image ''` restores the registry default. `--env KEY=VALUE` saves an upstream runtime setting. `--unset-env KEY` removes an override.
+`--image IMAGE` saves an explicit image override and bypasses a registered build. `--image ''` restores the registry default. `--env KEY=VALUE` saves an upstream runtime setting. `--unset-env KEY` removes an override. `--https` and `--no-https` choose the viewer scheme for the box.
 
 Environment defaults merge from [runtime.json](runtime.json), then the type's registry entry, then saved instance overrides. Boxes applies the account credentials, PUID, PGID, and Pelorus enablement after that merge. The CLI also reserves `HOME`, Wayland mode, and `FILE__` settings against user overrides. Other upstream settings remain upstream behavior, not a separate tuning framework.
 
@@ -124,7 +125,7 @@ printf '%s' 'example text' | "$BOXES_ROOT/box" agent "$TYPE" "$NAME" text
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" control '{"action":"left_click_drag","start_coordinate":[100,100],"end_coordinate":[300,300]}'
 ```
 
-These commands use the upstream `/pelorus/api/state`, `/windows`, `/desktop/screenshot`, `/desktop/explore/{pid}`, and `/desktop/control` endpoints through the authenticated HTTPS viewer port. `screenshot` without `--output` returns the upstream base64 JSON. `text` without an argument reads stdin. A positional text argument is visible to host process inspection. Do not put secrets in positional arguments.
+These commands use the upstream `/pelorus/api/state`, `/windows`, `/desktop/screenshot`, `/desktop/explore/{pid}`, and `/desktop/control` endpoints through the authenticated viewer port. `screenshot` without `--output` returns the upstream base64 JSON. `text` without an argument reads stdin. A positional text argument is visible to host process inspection. Do not put secrets in positional arguments.
 
 Input is asynchronous. Observe a fresh screenshot or app state before the next consequential action. `cursor_position` returns HTTP 500 in the benchmarked upstream version. Menu text can be absent from `state`. Neither behavior is hidden or replaced with invented state. Use screenshots when accessibility data is incomplete.
 
@@ -140,7 +141,7 @@ The shared defaults in [runtime.json](runtime.json) use the upstream `linuxserve
 
 Containers share the host kernel. They are not strong sandboxes for hostile code. Desktop sessions can run commands, read their mounts, and access the network. The upstream desktop user has sudo access inside the container. A writable bind mount gives that session the ability to modify its source. Even a read-only socket mount can grant control of its service. Do not mount Docker sockets, sensitive host directories, or credentials into untrusted sessions.
 
-Boxes does not use privileged mode, host networking, or a Docker socket mount. Only the authenticated HTTPS port 3001 is published. A new box publishes it on every host IPv4 interface by default, so anyone who can reach the host can reach the login prompt. Use a host firewall, or `--bind 127.0.0.1` or a private address, on untrusted networks. Raw control ports 5000 and 5100 are not published. Device access comes from the selected registry entry. Strong random Basic Auth does not make an internet-facing remote desktop safe.
+Boxes does not use privileged mode, host networking, or a Docker socket mount. Only the authenticated viewer port is published: internal port 3000 for the default HTTP box and internal port 3001 for `--https`. A new box publishes it on every host IPv4 interface by default, so anyone who can reach the host can reach the login prompt. Use a host firewall, or `--bind 127.0.0.1` or a private address, on untrusted networks. Raw control ports 5000 and 5100 are not published. Device access comes from the selected registry entry. Strong random Basic Auth does not make an internet-facing remote desktop safe.
 
 ## Runtime ownership
 

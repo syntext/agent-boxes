@@ -78,7 +78,7 @@ class ListTests(unittest.TestCase):
         self.assertEqual(plain.splitlines(), [
             "TYPE     NAME   STATE   BIND       PORT   URL",
             "browser  local  absent  127.0.0.1  -      -",
-            "browser  open   absent  0.0.0.0    41001  https://desktop-host:41001/"])
+            "browser  open   absent  0.0.0.0    41001  http://desktop-host:41001/"])
         self.assertEqual([(value["bind"], value["port"]) for value in json.loads(listed)],
                          [("127.0.0.1", None), ("0.0.0.0", 41001)])
         self.assertNotIn(config["password"], plain + listed)

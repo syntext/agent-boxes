@@ -34,7 +34,23 @@ class ModelTests(unittest.TestCase):
         self.assertEqual((config["environment"], config["port"]), ({"TZ": "Europe/Amsterdam"}, 41001))
         self.assertEqual((reopened.directory / "instance.json").stat().st_mode & 0o777, 0o600)
         self.assertEqual(reopened.compose(config)["services"]["desktop"]["ports"],
-                         [{"target": 3001, "published": "41001", "host_ip": "0.0.0.0", "protocol": "tcp"}])
+                         [{"target": 3000, "published": "41001", "host_ip": "0.0.0.0", "protocol": "tcp"}])
+
+    def test_https_is_opt_in_and_legacy_configs_keep_https(self):
+        instance = Instance(box_type("browser"), "tls")
+        config = instance.load(create=True)
+        self.assertFalse(config["https"])
+        configure(parser().parse_args(["up", "browser", "tls", "--https"]), config)
+        instance.save(config)
+        self.assertEqual(instance.load()["https"], True)
+        self.assertEqual(instance.compose(config)["services"]["desktop"]["ports"],
+                         [{"target": 3001, "published": "0", "host_ip": "0.0.0.0", "protocol": "tcp"}])
+        configure(parser().parse_args(["up", "browser", "tls", "--no-https"]), config)
+        self.assertEqual(instance.compose(config)["services"]["desktop"]["ports"][0]["target"], 3000)
+        legacy = instance.load(create=False)
+        del legacy["https"]
+        instance.save(legacy)
+        self.assertTrue(instance.load()["https"])
 
     def test_new_instance_binds_all_interfaces_unless_overridden(self):
         instance = Instance(box_type("browser"), "loopback")

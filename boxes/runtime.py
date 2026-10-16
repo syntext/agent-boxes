@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .model import BoxError, Instance, atomic_json
+from .model import BoxError, Instance, atomic_json, scheme, viewer_port
 
 
 def run(arguments: list[str], *, capture: bool = False, check: bool = True) -> subprocess.CompletedProcess:
@@ -54,32 +54,33 @@ def remove(instance: Instance):
     compose(instance, path, ["down"])
 
 
-def port(container: dict | None) -> int | None:
+def port(container: dict | None, config: dict) -> int | None:
     if not container:
         return None
-    ports = container["NetworkSettings"]["Ports"].get("3001/tcp")
+    ports = container["NetworkSettings"]["Ports"].get(f"{viewer_port(config)}/tcp")
     return int(ports[0]["HostPort"]) if ports else None
 
 
 def status(instance: Instance, config: dict, container: dict | None = None) -> dict:
     container = inspect(instance) if container is None else container
-    published = port(container) or config.get("published_port") or config.get("port")
+    published = port(container, config) or config.get("published_port") or config.get("port")
     host = os.environ.get("BOXES_HOSTNAME", "localhost" if config["bind"].startswith("127.") else socket.gethostname())
     return {"type": instance.kind.name, "name": instance.name, "project": instance.project,
             "state": container["State"]["Status"] if container else "absent",
             "image": container["Config"]["Image"] if container else config["image"] or instance.kind.image,
             "image_id": container["Image"] if container else None,
-            "url": f"https://{host}:{published}/" if published else None,
+            "url": f"{scheme(config)}://{host}:{published}/" if published else None,
             "bind": config["bind"], "port": published,
             "config_file": str(instance.directory / "instance.json"),
             "data": config["data"], "mounts": config["mounts"],
+            "https": scheme(config) == "https",
             "tls_verify": config["tls_verify"]}
 
 
 def ensure(instance: Instance, config: dict, action: str):
     container = inspect(instance)
     if not (config["port"] or config["published_port"]):
-        assigned = port(container)
+        assigned = port(container, config)
         if not assigned:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as candidate:
                 candidate.bind((config["bind"], 0))
@@ -111,7 +112,7 @@ def ensure(instance: Instance, config: dict, action: str):
         arguments.append("--detach")
     compose(instance, path, arguments)
     container = inspect(instance)
-    assigned = port(container)
+    assigned = port(container, config)
     if assigned:
         config["published_port"] = assigned
         instance.save(config)

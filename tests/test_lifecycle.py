@@ -7,9 +7,10 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import urllib.request
 from unittest.mock import patch
 
-from boxes import cli, runtime
+from boxes import agent, cli, runtime
 from boxes.model import BoxError, Instance, atomic_json, box_type
 
 
@@ -234,6 +235,31 @@ class LifecycleTests(unittest.TestCase):
                                            f"label=com.docker.compose.project={self.instance.project}"])
                 self.assertEqual(calls[1], ["docker", "container", "inspect", "fixture-id"])
                 self.assertEqual(calls[2][-len(operation):], operation)
+
+    def test_startup_connection_reset_retries_instead_of_escaping_as_oserror(self):
+        container = {"State": {"Running": True},
+                     "NetworkSettings": {"Ports": {"3000/tcp": [{"HostPort": "39223"}]}}}
+        config = {"bind": "0.0.0.0", "user": "box", "password": "boxbox",
+                  "https": False, "tls_verify": False}
+        with patch.object(agent, "inspect", return_value=container), \
+             patch("urllib.request.build_opener") as build:
+            build.return_value.open.side_effect = ConnectionResetError(104, "Connection reset by peer")
+            with self.assertRaisesRegex(BoxError, "Pelorus request failed"):
+                agent.request(self.instance, config, "state")
+
+    def test_https_requests_use_the_secure_port(self):
+        container = {"State": {"Running": True},
+                     "NetworkSettings": {"Ports": {"3001/tcp": [{"HostPort": "39223"}]}}}
+        config = {"bind": "0.0.0.0", "user": "box", "password": "boxbox",
+                  "https": True, "tls_verify": False}
+        with patch.object(agent, "inspect", return_value=container), \
+             patch("urllib.request.build_opener") as build:
+            build.return_value.open.return_value = io.BytesIO(b'{"state": "ok"}')
+            self.assertEqual(agent.request(self.instance, config, "state"), {"state": "ok"})
+            request = build.return_value.open.call_args.args[0]
+        self.assertEqual(request.full_url, "https://127.0.0.1:39223/pelorus/api/state")
+        self.assertEqual([type(handler) for handler in build.call_args.args],
+                         [urllib.request.ProxyHandler, urllib.request.HTTPSHandler])
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 import base64
+import http.client
 import json
 import ssl
 import time
-import urllib.error
 import urllib.request
 
 from .model import BoxError
@@ -27,19 +27,24 @@ def wait_ready(instance, config, timeout=180):
 
 def request(instance, config, endpoint, payload=None):
     container = inspect(instance)
-    if not container or not container["State"]["Running"] or not port(container):
-        raise BoxError("The instance has no running HTTPS listener.")
+    published = port(container, config)
+    if not container or not container["State"]["Running"] or not published:
+        raise BoxError("The instance has no running viewer listener.")
     address = config["bind"] if config["bind"] != "0.0.0.0" else "127.0.0.1"
-    url = f"https://{address}:{port(container)}/pelorus/api/{endpoint}"
+    https = config.get("https", True)
+    url = f"{'https' if https else 'http'}://{address}:{published}/pelorus/api/{endpoint}"
     auth = base64.b64encode(f"{config['user']}:{config['password']}".encode()).decode()
     headers = {"Authorization": "Basic " + auth, "Content-Type": "application/json"}
     data = None if payload is None else json.dumps(payload).encode()
-    context = ssl.create_default_context() if config["tls_verify"] else ssl._create_unverified_context()
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=context))
+    handlers = [urllib.request.ProxyHandler({})]
+    if https:
+        context = ssl.create_default_context() if config["tls_verify"] else ssl._create_unverified_context()
+        handlers.append(urllib.request.HTTPSHandler(context=context))
+    opener = urllib.request.build_opener(*handlers)
     try:
         with opener.open(urllib.request.Request(url, data=data, headers=headers), timeout=45) as response:
             result = json.load(response)
-    except (urllib.error.URLError, ValueError, TimeoutError) as error:
+    except (OSError, http.client.HTTPException, ValueError) as error:
         raise BoxError(f"Pelorus request failed. {error}") from error
     if isinstance(result, dict) and (result.get("error") or result.get("result") in {"error", "failed"}):
         raise BoxError(f"Pelorus rejected the action. {result}")

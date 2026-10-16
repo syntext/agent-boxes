@@ -23,8 +23,13 @@ def main():
     parser.add_argument("--types", nargs="+", choices=["browser", "bambu", "android"], default=["browser", "bambu", "android"])
     parser.add_argument("--sdk-seed", type=Path)
     parser.add_argument("--viewer", action="store_true", help="Also render the shared desktop with agent-browser")
+    parser.add_argument("--https", action="store_true", help="Verify boxes on the HTTPS viewer port instead of the default HTTP one")
     parser.add_argument("--keep-running", action="store_true")
     args = parser.parse_args()
+    scheme = "https" if args.https else "http"
+    internal = 3001 if args.https else 3000
+    context = ssl._create_unverified_context() if args.https else None
+    tls = ["--https"] if args.https else []
     directory = Path.home() / "work/boxes/verification" / (time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(3))
     directory.mkdir(parents=True)
     environment = os.environ | {"BOXES_STATE_DIR": str(directory / "state"), "BOXES_DATA_DIR": str(directory / "data"),
@@ -80,7 +85,7 @@ def main():
         session = environment["BOXES_PROJECT_PREFIX"] + "-" + kind
         private = directory / f"viewer-{kind}.json"
         auth = base64.b64encode(f'{config["user"]}:{config["password"]}'.encode()).decode()
-        private.write_text(json.dumps({"session": session, "ignoreHttpsErrors": True,
+        private.write_text(json.dumps({"session": session, "ignoreHttpsErrors": args.https,
                                       "headers": json.dumps({"Authorization": "Basic " + auth})}))
         private.chmod(0o600)
         command = ["agent-browser", "--config", str(private)]
@@ -88,7 +93,7 @@ def main():
             subprocess.run([*command, "batch", "--json"],
                            input=json.dumps([["set", "credentials", config["user"], config["password"]]]),
                            text=True, check=True, capture_output=True)
-            subprocess.run([*command, "open", f'https://localhost:{status["port"]}/'], check=True, capture_output=True)
+            subprocess.run([*command, "open", f'{scheme}://localhost:{status["port"]}/'], check=True, capture_output=True)
             subprocess.run([*command, "wait", "--fn", "Array.from(document.querySelectorAll('video')).some(v => v.readyState === 4 && v.videoWidth > 0)"],
                            check=True, capture_output=True, timeout=90)
             subprocess.run([*command, "set", "viewport", "1920", "1080"], check=True, capture_output=True)
@@ -103,12 +108,12 @@ def main():
     try:
         for kind in args.types:
             instances.append((kind, "first"))
-            status = box("up", kind, "first")
+            status = box("up", kind, "first", *tls)
             initial = inspect(kind)
             ready(kind)
             check(f"{kind} running with agent API", status["state"] == "running")
             check(f"{kind} no privileged mode or host network", not initial["HostConfig"]["Privileged"] and initial["HostConfig"]["NetworkMode"] != "host")
-            check(f"{kind} exposes only HTTPS", set(initial["HostConfig"]["PortBindings"]) == {"3001/tcp"})
+            check(f"{kind} exposes only {scheme.upper()}", set(initial["HostConfig"]["PortBindings"]) == {f"{internal}/tcp"})
             config = json.loads(Path(status["config_file"]).read_text())
             check(f"{kind} password absent from status", config["password"] not in json.dumps(status))
             old_password = config["password"]
@@ -119,10 +124,10 @@ def main():
             check(f"{kind} password rotation retains port", rotated["port"] == status["port"])
             def authentication(password):
                 token = base64.b64encode(f'{config["user"]}:{password}'.encode()).decode()
-                request = urllib.request.Request(f'https://localhost:{status["port"]}/pelorus/api/state',
+                request = urllib.request.Request(f'{scheme}://localhost:{status["port"]}/pelorus/api/state',
                                                  headers={"Authorization": "Basic " + token})
                 try:
-                    with urllib.request.urlopen(request, context=ssl._create_unverified_context(), timeout=15) as response:
+                    with urllib.request.urlopen(request, context=context, timeout=15) as response:
                         return response.status
                 except urllib.error.HTTPError as error:
                     code = error.code
@@ -135,21 +140,21 @@ def main():
             check(f"{kind} omitted password preserves credentials", authentication(replacement) == 200 and
                   json.loads(Path(status["config_file"]).read_text())["password"] == replacement)
             initial = inspect(kind)
-            requests = [urllib.request.Request(f'https://localhost:{status["port"]}{endpoint}')
+            requests = [urllib.request.Request(f'{scheme}://localhost:{status["port"]}{endpoint}')
                         for endpoint in ("/", "/pelorus/api/state", "/pelorus/api/desktop/screenshot")]
-            requests.append(urllib.request.Request(f'https://localhost:{status["port"]}/pelorus/api/desktop/control',
+            requests.append(urllib.request.Request(f'{scheme}://localhost:{status["port"]}/pelorus/api/desktop/control',
                                                   data=json.dumps({"action": "mouse_move", "coordinate": [600, 400]}).encode(),
                                                   headers={"Content-Type": "application/json"}))
             for request in requests:
                 try:
-                    with urllib.request.urlopen(request, context=ssl._create_unverified_context(), timeout=15) as response:
+                    with urllib.request.urlopen(request, context=context, timeout=15) as response:
                         code = response.status
                 except urllib.error.HTTPError as error:
                     code = error.code
                     error.close()
                 check(f"{kind} authentication protects {request.get_method()} {request.selector}", code == 401)
-            connection = http.client.HTTPSConnection("localhost", status["port"],
-                                                     context=ssl._create_unverified_context(), timeout=15)
+            connection = (http.client.HTTPSConnection if args.https else http.client.HTTPConnection)(
+                "localhost", status["port"], **({"context": context} if args.https else {}), timeout=15)
             try:
                 connection.request("GET", "/api/websockets", headers={
                     "Connection": "Upgrade", "Upgrade": "websocket", "Sec-WebSocket-Version": "13",
@@ -261,7 +266,7 @@ def main():
                     report["checks"].append({"name": "Android boot", "skipped": "Supply --sdk-seed or provision a licensed SDK separately."})
         if "browser" in args.types:
             instances.append(("browser", "second"))
-            box("up", "browser", "second")
+            box("up", "browser", "second", *tls)
             ready("browser", "second")
             second = box("exec", "browser", "second", "--", "sh", "-c", "test ! -e /config/marker && test ! -e /work/marker && printf isolated", parse=False)
             check("Browser instance data isolation", second == "isolated")
