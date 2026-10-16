@@ -34,7 +34,15 @@ class ModelTests(unittest.TestCase):
         self.assertEqual((config["environment"], config["port"]), ({"TZ": "Europe/Amsterdam"}, 41001))
         self.assertEqual((reopened.directory / "instance.json").stat().st_mode & 0o777, 0o600)
         self.assertEqual(reopened.compose(config)["services"]["desktop"]["ports"],
-                         [{"target": 3001, "published": "41001", "host_ip": "127.0.0.1", "protocol": "tcp"}])
+                         [{"target": 3001, "published": "41001", "host_ip": "0.0.0.0", "protocol": "tcp"}])
+
+    def test_new_instance_binds_all_interfaces_unless_overridden(self):
+        instance = Instance(box_type("browser"), "loopback")
+        config = instance.load(create=True)
+        self.assertEqual(config["bind"], "0.0.0.0")
+        configure(parser().parse_args(["up", "browser", "loopback", "--bind", "127.0.0.1"]), config)
+        instance.save(config)
+        self.assertEqual(instance.load()["bind"], "127.0.0.1")
 
     def test_instance_data_is_separate(self):
         first = Instance(box_type("browser"), "first")

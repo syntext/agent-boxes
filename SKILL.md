@@ -26,7 +26,7 @@ Use stdin for sensitive text. Do not print `instance.json`, credentials, cookies
 
 Save application work before mount changes, update, or recreation. Those operations replace the desktop container. Do not purge data without explicit permission. Do not touch sibling legacy projects or containers.
 
-State can omit menus and custom-rendered content. Use screenshots rather than inventing missing elements. The upstream `cursor_position` action is known to fail with HTTP 500. Do not report it as supported. Pelorus requests use the authenticated HTTPS viewer port. Do not publish raw control ports or configure model credentials.
+State can omit menus and custom-rendered content. Use screenshots rather than inventing missing elements. The upstream `cursor_position` action is known to fail with HTTP 500. Do not report it as supported. Pelorus requests use the authenticated HTTPS viewer port. Do not publish raw control ports or configure model credentials. A new box listens on every host IPv4 interface. Pass `--bind 127.0.0.1` when the human wants loopback only. `"$BOXES_ROOT/box" list` shows each box's bind address, port, and URL.
 
 One global `~/.config/opencode/skills/boxes` link to this repository root registers this skill and its nested children. Do not create or change global skill links unless asked.
 

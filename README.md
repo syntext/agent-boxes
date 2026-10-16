@@ -42,6 +42,7 @@ For an instance name that also names an agent or mount action, put `--` after th
 ```sh
 "$BOXES_ROOT/box" up "$TYPE" --password boxbox
 "$BOXES_ROOT/box" up "$TYPE" "$NAME" --password boxbox
+"$BOXES_ROOT/box" list
 "$BOXES_ROOT/box" list --json
 "$BOXES_ROOT/box" status --json
 "$BOXES_ROOT/box" status "$TYPE" "$NAME" --json
@@ -69,9 +70,9 @@ For an instance name that also names an agent or mount action, put `--` after th
 
 Each box keeps one account named `box`. `up`, `recreate`, and `update` accept `--password` to replace its password. Omit the option to retain saved credentials. A new box without the option receives a random password. Empty passwords and control characters are rejected. Password arguments are visible in shell history and host process listings.
 
-`"$BOXES_ROOT/box" url "$TYPE" "$NAME"` prints the viewer URL. `"$BOXES_ROOT/box" login "$TYPE" "$NAME"` displays its credentials only in a terminal. The credentials also reside in the mode-600 `instance.json` reported by `status`. Status and list output never include the password. Treat the whole state directory as secret.
+`"$BOXES_ROOT/box" url "$TYPE" "$NAME"` prints the viewer URL. `"$BOXES_ROOT/box" login "$TYPE" "$NAME"` displays its credentials only in a terminal. The credentials also reside in the mode-600 `instance.json` reported by `status`. `"$BOXES_ROOT/box" list` prints an aligned table with one row per saved box: type, name, state, bind address, host port, and URL, with `-` for a value that is not assigned yet. A stopped or absent box shows its saved port even though nothing listens on it. Status and list output never include the password. Treat the whole state directory as secret.
 
-The default listener binds to `127.0.0.1`. Its URL uses `localhost` because the machine's network hostname does not address a loopback-only listener. For a trusted network, an explicit bind address and hostname are supported.
+A new box listens on `0.0.0.0`, every host IPv4 interface, and its URL uses the machine hostname. Docker publishes that listener on IPv4 only. Existing boxes keep their saved bind address. `--bind 127.0.0.1` restricts a box to loopback, and its URL then uses `localhost`. An explicit bind address and hostname are also supported.
 
 ```sh
 BOXES_HOSTNAME=desktop-host "$BOXES_ROOT/box" up "$TYPE" "$NAME" --password boxbox --bind 100.100.1.2 --port 3443
@@ -139,7 +140,7 @@ The shared defaults in [runtime.json](runtime.json) use the upstream `linuxserve
 
 Containers share the host kernel. They are not strong sandboxes for hostile code. Desktop sessions can run commands, read their mounts, and access the network. The upstream desktop user has sudo access inside the container. A writable bind mount gives that session the ability to modify its source. Even a read-only socket mount can grant control of its service. Do not mount Docker sockets, sensitive host directories, or credentials into untrusted sessions.
 
-Boxes does not use privileged mode, host networking, or a Docker socket mount. Only the authenticated HTTPS port 3001 is published, on loopback by default. Raw control ports 5000 and 5100 are not published. Device access comes from the selected registry entry. Changing `--bind` broadens exposure. Strong random Basic Auth does not make an internet-facing remote desktop safe.
+Boxes does not use privileged mode, host networking, or a Docker socket mount. Only the authenticated HTTPS port 3001 is published. A new box publishes it on every host IPv4 interface by default, so anyone who can reach the host can reach the login prompt. Use a host firewall, or `--bind 127.0.0.1` or a private address, on untrusted networks. Raw control ports 5000 and 5100 are not published. Device access comes from the selected registry entry. Strong random Basic Auth does not make an internet-facing remote desktop safe.
 
 ## Runtime ownership
 

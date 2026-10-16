@@ -175,7 +175,7 @@ class Instance:
         for child in ("config", "work"):
             (self.data / child).mkdir(mode=0o700, parents=True, exist_ok=True)
         value = {"version": 1, "type": self.kind.name, "name": self.name,
-                 "data": str(self.data), "bind": "127.0.0.1", "port": None,
+                 "data": str(self.data), "bind": "0.0.0.0", "port": None,
                  "environment": {}, "mounts": [], "image": None,
                  "user": "box", "password": secrets.token_urlsafe(32),
                  "tls_verify": False, "published_port": None}

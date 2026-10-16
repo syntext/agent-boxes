@@ -48,6 +48,17 @@ def output(value):
     print(json.dumps(value, indent=2))
 
 
+def table(values):
+    if not values:
+        print("No boxes.")
+        return
+    rows = [("TYPE", "NAME", "STATE", "BIND", "PORT", "URL")]
+    rows += [(v["type"], v["name"], v["state"], v["bind"], str(v["port"] or "-"), v["url"] or "-") for v in values]
+    widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
+    for row in rows:
+        print("  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip())
+
+
 def configure(args, config):
     if args.password is not None:
         if not args.password or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in args.password):
@@ -176,8 +187,7 @@ def main(argv=None):
             if args.json:
                 output(results)
             else:
-                for value in results:
-                    print(f"{value['type']} {value['name']} {value['state']} {value['url'] or ''}")
+                table(results)
             return 0
         instance = Instance(box_type(args.type), args.name)
         arguments = getattr(args, "arguments", [])
@@ -202,7 +212,7 @@ def main(argv=None):
                 elif args.json:
                     output(value)
                 else:
-                    print(f"{value['type']} {value['name']} {value['state']} {value['url'] or ''}")
+                    table([value])
             elif command == "login":
                 if not sys.stdout.isatty():
                     raise BoxError("Login prints a password only to a terminal. Read the private instance.json directly for automation.")
