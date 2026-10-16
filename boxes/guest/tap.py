@@ -408,7 +408,7 @@ class Sniffer:
                     self.packet(packet)
             moment = time.monotonic()
             for connection_id, held in list(self.connections.items()):
-                if held["pending"]:
+                if held["pending"] and moment - held["progress"] > RESYNC_SECONDS:
                     self.recover(connection_id, held, moment)
                 elif moment - held["progress"] > IDLE_SECONDS:
                     self.connections.pop(connection_id, None)

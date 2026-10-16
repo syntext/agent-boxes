@@ -189,7 +189,7 @@ printf '%s\n' '# Example workflow' | "$BOXES_ROOT/box" lessons "$TYPE" record ex
 
 `stop` joins the segments and renders an annotated video with clicks, drags, scrolls, and typed text. It extracts frames around clicks and scene changes. The result is copied to `BOXES_DATA_DIR/recordings/<type>/<name>/<timestamp>/` under the instance's saved data root. The directory contains `screen.mp4`, `screen-annotated.mp4`, `events.jsonl`, `index.json`, `frames/`, and `recording.json`.
 
-Typed text is recorded in full. Screen contents and input can include private information. Recordings are secrets and must not be committed. Nothing deletes a recording automatically. `record TYPE NAME forget RECORDING` removes the named recording when a person requests it. `list` supplies recording names.
+Typed text is recorded in full. Screen contents and input can include private information. Recordings are secrets and must not be committed. Nothing deletes a recording automatically. `record TYPE NAME forget RECORDING` removes the named host export when a person requests it. It does not remove the working copy under `/config/.boxes` inside the instance. Purging the instance removes its managed `/config` data. `list` supplies recording names.
 
 The input log comes from the box's own viewer connection. Human demonstrations must take place in that viewer's desktop. The tools require `ffmpeg` and `wf-recorder`. The optional overlay requires `gir1.2-gtklayershell-0.1` and `python3-gi-cairo` for PyGObject's cairo binding. Shared defaults install these packages. Boxes created before those defaults need `recreate` or `update` first.
 

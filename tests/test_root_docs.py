@@ -47,6 +47,11 @@ class RootDocsTests(unittest.TestCase):
                 self.assertNotIn("boxbox", text)
                 self.assertNotRegex(text, r"--password\s+(?!`|to\b|retains\b|preserves\b|or\b)\S+")
 
+    def test_recording_deletion_documents_both_copies(self):
+        text = (ROOT / "USAGE.md").read_text()
+        self.assertIn("removes the named host export", text)
+        self.assertIn("does not remove the working copy under `/config/.boxes`", text)
+
     def test_root_document_links_and_heading_anchors_resolve(self):
         for relative in ("README.md", "USAGE.md"):
             path = ROOT / relative

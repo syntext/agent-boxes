@@ -237,6 +237,23 @@ class PacketTests(unittest.TestCase):
         self.assertEqual([event["event"] for event in events],
                          ["move", "key", "text", "key", "key", "text", "key", "text"])
 
+    def test_the_capture_loop_waits_before_abandoning_a_gap(self):
+        sniffer, _ = self.sniffer()
+        connection = (b"source", 1, b"destination", 2)
+        sniffer.connections[connection] = {"next": 1000, "buffer": b"", "pending": {1100: websocket("kd,104")},
+                                           "progress": 500.0}
+        sock = Mock()
+        sock.recv.side_effect = tap.socket.timeout
+        sniffer.sockets = [("lo", sock)]
+
+        with patch.object(tap.time, "monotonic", return_value=500.5):
+            sniffer.run(stopping={"asked": True})
+        self.assertTrue(sniffer.connections[connection]["pending"])
+
+        with patch.object(tap.time, "monotonic", return_value=502.0):
+            sniffer.run(stopping={"asked": True})
+        self.assertFalse(sniffer.connections[connection]["pending"])
+
     def test_a_corrupted_frame_is_resynced_to_the_next_message(self):
         sniffer, events = self.sniffer()
         broken = b"\x81\x05garbage"
