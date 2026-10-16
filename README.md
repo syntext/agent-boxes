@@ -1,252 +1,99 @@
 # Boxes
 
-Persistent, isolated GUI desktop instances for people and agents. A person opens the Selkies web viewer. An agent controls the same desktop through Pelorus or runs explicit commands with `box exec`. No model credentials are required. Available types come from [registry.json](registry.json), not a fixed catalog in this README.
+Boxes runs persistent desktop apps in Docker. You open the desktop in a browser over HTTPS, and an agent can work in the same session. Use it when a task needs a GUI that you can inspect, take over, and return to later. No model credentials are required.
+
+## What you can do
+
+- Keep persistent named desktops with separate app settings, files, and credentials.
+- Share human and agent control of the same desktop through the web viewer and the Pelorus API.
+- Run explicit commands inside a box with `box exec` or open a shell with `box shell`.
+- Share a project through `/work` and add read-only or writable host mounts.
+- Record demonstrations and keep reusable Markdown lessons for agents.
+- Choose registered desktop types from [registry.json](registry.json). Each entry's `directory` contains its setup guide and agent skill.
+
+## Requirements
+
+- Linux with Docker Engine and the Docker Compose plugin. Docker access grants host-level control.
+- Python 3.11 or newer. The host CLI uses only the standard library.
+- A host architecture and devices supported by your selected type. Check its `architectures` and `devices` in [registry.json](registry.json).
+- Disk space for images and persistent data under `~/work/boxes`.
+- Network access for image pulls, builds, and package installation.
+
+Check the selected type's README for storage, provisioning, and other app requirements before starting it.
+
+## Install
+
+Clone the repository and enter its directory. No global CLI installation is needed.
+
+```sh
+git clone https://github.com/syntext/agent-boxes.git
+cd agent-boxes
+```
+
+## First run
+
+Choose a key from [registry.json](registry.json). Replace `<registered-type>` below with that key, then start a named desktop.
+
+```sh
+BOXES_ROOT="$(pwd -P)"
+TYPE='<registered-type>'
+NAME=research
+"$BOXES_ROOT/box" up "$TYPE" "$NAME"
+"$BOXES_ROOT/box" url "$TYPE" "$NAME"
+"$BOXES_ROOT/box" login "$TYPE" "$NAME"
+```
+
+Open the printed HTTPS URL. Sign in with the credentials that `login` shows in your terminal. New boxes receive a random password. Repeating `up` without `--password` preserves saved credentials. First startup can take several minutes while the image installs utilities.
+
+The upstream certificate is self-signed, so your browser shows a certificate warning. Proceed only for a host you trust. HTTPS provides the secure context that the web viewer requires away from localhost.
+
+New boxes bind to `0.0.0.0`, every host IPv4 interface. Restrict access with a firewall or use `--bind 127.0.0.1` for local-only HTTPS access. Do not expose the desktop to the public internet. HTTP is an explicit agent-only mode that belongs on loopback with `--bind 127.0.0.1`.
+
+See [human access and TLS](USAGE.md#human-access-and-tls) for bind addresses, hostnames, certificates, and HTTP options.
+
+## Browser performance
+
+Apps render inside the container. Selkies streams desktop output to your browser and sends your input back. The browser does not run the desktop app.
+
+This generally keeps interaction responsive on a local or private network. That is an expectation from the design, not a measured performance result. Actual responsiveness depends on network latency and bandwidth, host CPU and GPU capacity or software rendering, the selected app, resolution, and frame rate. Software-rendered emulators can be a heavier workload.
+
+## Commands
+
+Set `BOXES_ROOT="$(pwd -P)"` in the repository root. You can then invoke `"$BOXES_ROOT/box"` from any directory. These examples reuse `TYPE` and `NAME` from the first run.
+
+```sh
+"$BOXES_ROOT/box" list
+"$BOXES_ROOT/box" status "$TYPE" "$NAME"
+"$BOXES_ROOT/box" stop "$TYPE" "$NAME"
+"$BOXES_ROOT/box" start "$TYPE" "$NAME"
+"$BOXES_ROOT/box" logs "$TYPE" "$NAME" --tail 100
+"$BOXES_ROOT/box" exec "$TYPE" "$NAME" -- id
+"$BOXES_ROOT/box" shell "$TYPE" "$NAME"
+```
+
+Save your app work before changing configuration. `stop` retains files and settings. Use `start` to return to the desktop. The `--` in `exec` separates the instance name from the command and its arguments.
+
+The [command reference](USAGE.md#commands) covers recreation, updates, removal, and JSON output. See [workspaces and mounts](USAGE.md#persistent-configuration-and-mounts), [agent control](USAGE.md#agent-control), and [recording and lessons](USAGE.md#recording-and-lessons) for other tasks.
+
+## Safety and persistence
+
+Each named box keeps its own `/config`, `/work`, credentials, and saved configuration. `remove` retains these by default. Purge permanently deletes managed instance data. See [storage behavior](USAGE.md#persistent-configuration-and-mounts) and [removal semantics](USAGE.md#lifecycle) before changing or deleting data.
+
+Containers share the host kernel. They are not strong sandboxes for hostile code. A desktop can read its mounts and modify writable ones. Keep host secrets and Docker sockets out of untrusted sessions.
+
+The human and agent share one pointer, keyboard, and focus. An agent must pause when you take over. Recordings contain screen contents and typed text, so treat them and saved state as secrets. The [security reference](USAGE.md#security-boundaries) describes the limits.
 
 ## Install as an agent skill
 
-Clone the repository into the shared skills directory used by OpenCode and other compatible agents. The destination must not already exist.
+For a new skill installation, clone into the shared skills directory. The destination must not already exist.
 
 ```sh
 mkdir -p "$HOME/.agents/skills"
 git clone https://github.com/syntext/agent-boxes.git "$HOME/.agents/skills/boxes"
 ```
 
-OpenCode discovers the core skill and nested type skills from that checkout. Other agents may require separate registration for nested skills. Install the runtime prerequisites below before starting containers. If you already have a checkout, use the symlink instructions under [Agent skills](#agent-skills) instead.
+OpenCode discovers the core skill and nested type skills in that checkout. Other agents may need separate registration for nested skills. Runtime requirements still apply. For an existing checkout, use the [skill registration reference](USAGE.md#agent-skills).
 
-## Requirements
+## Development
 
-- Linux with Docker Engine and the Docker Compose plugin. Docker access grants host-level control.
-- Python 3.11 or newer on the host. The CLI uses only the standard library.
-- A host architecture and device access supported by the selected type. Check its `architectures` and `devices` in [registry.json](registry.json).
-- Disk space for images and persistent data under `~/work/boxes`. The selected type's README describes additional storage and provisioning requirements.
-- Network access for image pulls, builds, and package installation as required by the selected type.
-
-## Commands
-
-In the repository root, set `BOXES_ROOT="$(pwd -P)"`. Then invoke `"$BOXES_ROOT/box"` from any working directory. Agents loading a skill use its supplied base directory instead, as shown in [the core skill](SKILL.md). No global CLI installation is needed.
-
-Select a key from [registry.json](registry.json). Its `directory` identifies the type's README and skill. A registered directory name is also accepted as a type alias. An omitted instance name means `default`.
-
-Set the variables below before using any examples. Replace `<registered-type>` with an actual registry key, not the literal placeholder.
-
-```sh
-BOXES_ROOT="$(pwd -P)"
-TYPE='<registered-type>'
-NAME=research
-```
-
-Pass-through execution requires `"$BOXES_ROOT/box" exec "$TYPE" "$NAME" -- COMMAND ARG...`. The delimiter separates the optional instance name from arbitrary arguments, including flags. Additional type-specific commands are documented in the selected type's README.
-
-For an instance name that also names an agent or mount action, put `--` after the name. For example, `"$BOXES_ROOT/box" agent "$TYPE" state -- screenshot` addresses the instance named `state`.
-
-```sh
-"$BOXES_ROOT/box" up "$TYPE" --password boxbox
-"$BOXES_ROOT/box" up "$TYPE" "$NAME" --password boxbox
-"$BOXES_ROOT/box" list
-"$BOXES_ROOT/box" list --json
-"$BOXES_ROOT/box" status --json
-"$BOXES_ROOT/box" status "$TYPE" "$NAME" --json
-"$BOXES_ROOT/box" url "$TYPE" "$NAME"
-"$BOXES_ROOT/box" login "$TYPE" "$NAME"
-"$BOXES_ROOT/box" stop "$TYPE" "$NAME"
-"$BOXES_ROOT/box" start "$TYPE" "$NAME"
-"$BOXES_ROOT/box" restart "$TYPE" "$NAME"
-"$BOXES_ROOT/box" recreate "$TYPE" "$NAME"
-"$BOXES_ROOT/box" update "$TYPE" "$NAME"
-"$BOXES_ROOT/box" logs "$TYPE" "$NAME" --tail 100
-"$BOXES_ROOT/box" logs "$TYPE" "$NAME" --follow
-"$BOXES_ROOT/box" exec "$TYPE" "$NAME" -- id
-"$BOXES_ROOT/box" shell "$TYPE" "$NAME"
-"$BOXES_ROOT/box" remove "$TYPE" "$NAME"
-```
-
-`up` creates or starts an instance. Repeating it with unchanged options leaves the running container untouched. Changed options trigger recreation and are saved. If the type uses the shared package-install mod, first startup can take several minutes to install utilities. `up`, `start`, and running recreations wait for the desktop API for up to 180 seconds. `up`, `recreate`, and `update` accept `--wait SECONDS`, up to 900. A timeout leaves the container available for diagnosis. `"$BOXES_ROOT/box" agent "$TYPE" "$NAME" state` checks agent readiness.
-
-`start` reconciles saved configuration and current source defaults. `restart` restarts the existing container without applying configuration changes. `recreate` replaces the container with the local image and current source defaults. `update` pulls the selected image or rebuilds a registered build with `--pull`, then recreates the container. Update failures leave the existing container in place. A stopped instance stays stopped during `recreate`, `update`, and mount changes.
-
-`remove` deletes the container and Compose network. It retains the saved configuration, credentials, `/config`, and default `/work`. `up` can recreate that instance. `"$BOXES_ROOT/box" remove "$TYPE" "$NAME" --purge --yes` permanently deletes the instance's managed data and saved configuration. External workspace and mount sources are not purged. Back up before using purge.
-
-## Human access
-
-Each box keeps one account named `box`. `up`, `recreate`, and `update` accept `--password` to replace its password. Omit the option to retain saved credentials. A new box without the option receives a random password. Empty passwords, control characters, and a leading hyphen are rejected. The upstream image hands the password to `openssl passwd`, which reads a leading hyphen as an option and leaves the box unreachable. Password arguments are visible in shell history and host process listings.
-
-`"$BOXES_ROOT/box" url "$TYPE" "$NAME"` prints the viewer URL. `"$BOXES_ROOT/box" login "$TYPE" "$NAME"` displays its credentials only in a terminal. The credentials also reside in the mode-600 `instance.json` reported by `status`. `"$BOXES_ROOT/box" list` prints an aligned table with one row per saved box: type, name, state, bind address, host port, and URL, with `-` for a value that is not assigned yet. A stopped or absent box shows its saved port even though nothing listens on it. Status and list output never include the password. Treat the whole state directory as secret.
-
-A new box listens on `0.0.0.0`, every host IPv4 interface, and its URL uses the machine hostname. Docker publishes that listener on IPv4 only. Existing boxes keep their saved bind address. `--bind 127.0.0.1` restricts a box to loopback, and its URL then uses `localhost`. An explicit bind address and hostname are also supported.
-
-```sh
-BOXES_HOSTNAME=desktop-host "$BOXES_ROOT/box" up "$TYPE" "$NAME" --password boxbox --bind 100.100.1.2 --port 3443
-```
-
-Replace the example address with an address assigned to your host, and `desktop-host` with its reachable hostname. `BOXES_HOSTNAME` changes displayed URLs only. `--bind` changes the Docker listener. For a remote loopback listener, use an SSH tunnel or a trusted authenticated reverse proxy. Do not publish the raw desktop to the public internet.
-
-The upstream certificate is self-signed. A box serves HTTPS by default, and `--http` switches it to the upstream HTTP port. The agent client works over either scheme and does not use host HTTP proxies. The web client refuses to run outside a secure context, so an HTTP box shows "This application requires a secure connection (HTTPS)" for any page that is not `http://localhost`. Use `--http` only for agent-driven boxes; a person needs the HTTPS default, a loopback browser, or a TLS-terminating proxy. The local agent client skips certificate verification by default; `--tls-verify` enables the system trust store and requires a certificate trusted by Python and valid for the bound address. Credentials never appear in URLs.
-
-## Persistent configuration and mounts
-
-Small state defaults to `${XDG_STATE_HOME:-~/.local/state}/boxes`. `BOXES_STATE_DIR` overrides it. Data defaults to `~/work/boxes`. `BOXES_DATA_DIR` overrides it for new instances. An existing instance keeps its saved data path. Do not point multiple independent installations at the same data path.
-
-State and data paths must not overlap, including through symlinks or a saved data path. Boxes rejects equal or nested roots so purge cannot delete an instance's held lock.
-
-Each type and name has its own `/config`, `/work`, credentials, Compose project, and lock. The first host port is selected from an available host port and saved before container creation. A box serves HTTPS on internal port 3001 by default; `--http` publishes internal port 3000 instead, and `--no-http` returns it to HTTPS. A box saved without a recorded scheme stays on HTTPS. Docker receives an explicit binding so stop, start, restart, and recreation retain that port. If another process takes the port before Docker binds it, startup fails instead of silently selecting another port. An explicit occupied port also fails.
-
-```sh
-"$BOXES_ROOT/box" up "$TYPE" "$NAME" --password boxbox --http
-"$BOXES_ROOT/box" up "$TYPE" "$NAME" --password boxbox --workspace /absolute/project --env TZ=Europe/Amsterdam
-"$BOXES_ROOT/box" mount "$TYPE" "$NAME" set /absolute/reference /mnt/reference --mode ro
-"$BOXES_ROOT/box" mount "$TYPE" "$NAME" list
-"$BOXES_ROOT/box" mount "$TYPE" "$NAME" remove /mnt/reference
-"$BOXES_ROOT/box" mount "$TYPE" "$NAME" remove /work
-"$BOXES_ROOT/box" recreate "$TYPE" "$NAME" --unset-env TZ
-```
-
-`--workspace` replaces `/work` with an existing host directory. Removing its explicit `/work` mount restores the instance's original managed workspace. Mount sources must be absolute existing real paths. Targets must be `/work` or children of `/work` or `/mnt`. Explicit mounts cannot overlap or mask each other. Mounts cannot replace system directories or `/config`. Socket and kernel-device sources are rejected.
-
-Save app work before changing mounts or configuration. A change gracefully recreates a running desktop. Data directories are preserved, but unsaved application state is not. There is no atomic data rollback. Mount configuration is saved before reconciliation so a failed operation can be retried without repeating flags. Host directories are not recursively chowned. LinuxServer maps the desktop user through the caller's PUID and PGID.
-
-`--image IMAGE` saves an explicit image override and bypasses a registered build. `--image ''` restores the registry default. `--env KEY=VALUE` saves an upstream runtime setting. `--unset-env KEY` removes an override. `--http` and `--no-http` choose the viewer scheme for the box.
-
-Environment defaults merge from [runtime.json](runtime.json), then the type's registry entry, then saved instance overrides. Boxes applies the account credentials, PUID, PGID, and Pelorus enablement after that merge. The CLI also reserves `HOME`, Wayland mode, and `FILE__` settings against user overrides. Other upstream settings remain upstream behavior, not a separate tuning framework.
-
-## Agent control
-
-```sh
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" state
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" windows
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" screenshot --output /absolute/screen.png
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" move 600 400
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" click 600 400
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" click 600 400 --button right
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" key Escape
-printf '%s' 'example text' | "$BOXES_ROOT/box" agent "$TYPE" "$NAME" text
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" key Return
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" scroll down 3
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" explore 1234
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" control '{"action":"left_click_drag","start_coordinate":[100,100],"coordinate":[300,300]}'
-```
-
-These commands use the upstream `/pelorus/api/state`, `/windows`, `/desktop/screenshot`, `/desktop/explore/{pid}`, and `/desktop/control` endpoints through the authenticated viewer port. `screenshot` without `--output` returns the upstream base64 JSON. `text` without an argument reads stdin. A positional text argument is visible to host process inspection. Do not put secrets in positional arguments. `control` sends the payload to Pelorus unchanged. Use the field names the computer-use backend reads. The upstream contract declares `end_coordinate` for drags, but the backend reads `coordinate`.
-
-Input is asynchronous. Observe a fresh screenshot or app state before the next consequential action. Pelorus returns HTTP 500 for any computer-use response that omits `result`. `cursor_position` returns only `text`, so it fails. Menu text can be absent from `state`. No failure is hidden or replaced with invented state. Use screenshots when accessibility data is incomplete.
-
-The human and agent share one focus, pointer, and keyboard. An agent must pause on human takeover and wait for permission before resuming. There is no automatic ownership arbitration. Do not send conflicting input from multiple agents.
-
-## Recording and lessons
-
-A box can record its own desktop and the input that drives it, so a person can
-show an agent a task once and the agent can repeat it later.
-
-```sh
-"$BOXES_ROOT/box" record "$TYPE" "$NAME" start [--fps 15] [--overlay]
-"$BOXES_ROOT/box" record "$TYPE" "$NAME" pause
-"$BOXES_ROOT/box" record "$TYPE" "$NAME" resume
-"$BOXES_ROOT/box" record "$TYPE" "$NAME" stop
-"$BOXES_ROOT/box" record "$TYPE" "$NAME" status
-"$BOXES_ROOT/box" record "$TYPE" "$NAME" list
-"$BOXES_ROOT/box" record "$TYPE" "$NAME" forget RECORDING
-"$BOXES_ROOT/box" lessons "$TYPE" list
-"$BOXES_ROOT/box" lessons "$TYPE" show SLUG
-"$BOXES_ROOT/box" lessons "$TYPE" path
-printf '%s' "# Title" | "$BOXES_ROOT/box" lessons "$TYPE" record SLUG
-```
-
-`start` records the screen and logs the clicks, drags, scrolls, and keystrokes the
-box's viewer sends, with their timestamps. `--overlay` also draws them on the live
-desktop while the person works. `pause` stops both the recorder and the input log,
-so nothing is captured while a secret is typed, and `resume` continues in a new
-segment. `stop` joins the segments, renders an annotated video with the clicks,
-drags, scrolls, and typed text drawn in, extracts the frames around each click and
-each scene change, and copies everything to
-`BOXES_DATA_DIR/recordings/<type>/<name>/<timestamp>/`. That directory then holds
-`screen.mp4`, `screen-annotated.mp4`, `events.jsonl`, `index.json`, `frames/`, and
-`recording.json`.
-
-Typed text is recorded in full. A recording therefore contains whatever was on the
-screen and whatever was typed, including anything private, so treat it as secret
-and never commit it. Nothing deletes a recording on its own; `forget` removes one
-that a person has asked to remove.
-
-The input log is read from the box's own viewer connection, so a person must work
-in that viewer's desktop. The tools need `ffmpeg` and `wf-recorder`, and the
-optional overlay needs `gir1.2-gtklayershell-0.1` and `python3-gi-cairo` for
-PyGObject's cairo binding. The shared defaults install all of them, so a box made
-before that change needs `recreate` or `update` first.
-
-Capturing the viewer's connection requires the container's root account, which
-boxes already has: the tap opens its capture socket as root and drops to the
-desktop account before it writes anything. It reads only the box's own loopback
-traffic and changes no upstream service.
-
-Lessons are Markdown files under `BOXES_DATA_DIR/lessons/<type>/`. They are shared
-by every box of that type, so a workflow learned in one box is available in the
-others. An agent loads them before a task, follows a matching one step by step,
-and drafts a new one for review after a recording.
-
-## Type-specific setup and tools
-
-For the selected registry entry, open `README.md` in its `directory`. That reference covers the image, architecture, devices, storage, provisioning, and application commands. Its `SKILL.md` adds type-specific agent instructions.
-
-The shared defaults in [runtime.json](runtime.json) use the upstream `linuxserver/mods:universal-package-install` mod to install Mousepad, imv, and the recording tools ([Recording and lessons](#recording-and-lessons) lists them). The mod needs package-network access after recreation. A type can override those settings, for example when its image already includes the utilities. Use `box exec` or `box shell` for tools provided by the selected image. GUI execution uses the upstream Xwayland display `:0`. The CLI does not replace upstream service definitions or desktop menus.
-
-## Security boundaries
-
-Containers share the host kernel. They are not strong sandboxes for hostile code. Desktop sessions can run commands, read their mounts, and access the network. The upstream desktop user has sudo access inside the container. A writable bind mount gives that session the ability to modify its source. Even a read-only socket mount can grant control of its service. Do not mount Docker sockets, sensitive host directories, or credentials into untrusted sessions.
-
-Boxes does not use privileged mode, host networking, or a Docker socket mount. Only the authenticated viewer port is published: internal port 3001 for the default HTTPS box and internal port 3000 for `--http`. A new box publishes it on every host IPv4 interface by default, so anyone who can reach the host can reach the login prompt. Use a host firewall, or `--bind 127.0.0.1` or a private address, on untrusted networks. Raw control ports 5000 and 5100 are not published. Device access comes from the selected registry entry. Strong random Basic Auth does not make an internet-facing remote desktop safe.
-
-## Runtime ownership
-
-[registry.json](registry.json) defines image or build, app commands, architecture, device access, and app defaults. [runtime.json](runtime.json) defines inherited Selkies settings. The generated private Compose file lives beside each `instance.json`. Docker Compose owns containers and networking. Python owns validation, atomic per-instance configuration, file locking, and authenticated API calls. No boxes daemon or global mutable registry runs.
-
-Types use upstream images directly or build child images that retain upstream entrypoints and services. Shared runtime settings apply locally through generated Compose configuration. They do not require every type to inherit a locally built base image. Image builds and runtime settings are separate. A Dockerfile edit takes effect after rebuilding with `update`, not just after `recreate`.
-
-## Add a type
-
-Add an entry to [registry.json](registry.json) using the fields accepted by `BoxType` in [boxes/model.py](boxes/model.py). The registry key supplies `name`. Required fields are `directory`, `image`, `architectures`, `devices`, `environment`, and `commands`. Only `build` is optional.
-
-This illustrative entry uses a placeholder image. Replace it with a compatible upstream desktop image before use.
-
-```json
-{
-	"example": {
-		"directory": "example-box",
-		"image": "<compatible-desktop-image>",
-		"architectures": ["amd64"],
-		"devices": [],
-		"environment": {},
-		"commands": {}
-	}
-}
-```
-
-`directory` names the type's repository directory. Add its `README.md` and `SKILL.md` there. `architectures` lists supported host architectures. `devices` lists required host device paths. `environment` maps settings to string defaults. `commands` maps command hooks to argument lists. An optional `build` names a repository-relative Docker build context.
-
-Registering a command hook does not create a new CLI subcommand. Hooks work only where the existing dispatcher handles them. Extending the CLI requires explicit dispatcher changes and tests. Add type-specific checks to the verifier when needed. Its fixture set is not generated from the registry.
-
-## Evidence and checks
-
-Run the unit suite from the repository root. Inspect the verifier's options before selecting integration fixtures.
-
-```sh
-python3 -m unittest discover -s tests -v
-python3 scripts/verify.py --help
-```
-
-The real-Docker verifier checks its currently implemented fixtures, not arbitrary new registry types. It creates unique `boxes-test-*` projects with isolated state and data under `~/work/boxes/verification`. Shared checks cover authenticated APIs, input, screenshots, persistence, mount recreation, and lifecycle behavior. Type-specific checks depend on the selected fixtures and their prerequisites. `--viewer` adds rendered-viewer checks and requires the separately installed `agent-browser` CLI and its browser.
-
-The verifier removes only its own containers unless `--keep-running` is supplied. It retains data, command logs, screenshots, and a JSON report. A test command or an earlier report is not proof that the current fixtures pass. Inspect the report for failures and skips.
-
-## Agent skills
-
-The [core skill](SKILL.md) lives beside the CLI and its runtime assets. Each registered type keeps its own `SKILL.md` and `README.md` in the directory named by [registry.json](registry.json). Behavioral eval cases live in [tests/skill-evals/evals.json](tests/skill-evals/evals.json).
-
-One `~/.config/opencode/skills/boxes` symlink to the repository root registers the core skill and its nested children. OpenCode V2 discovers nested `SKILL.md` files recursively. Each containing directory's name determines its skill ID. Frontmatter `name` is a display label. No separate child links are needed.
-
-For an installation elsewhere, run the following only when global registration is wanted. Set `BOXES_ROOT` as described under Commands first. `ln` refuses to replace an existing entry.
-
-```sh
-mkdir -p "$HOME/.config/opencode/skills"
-ln -sT -- "$BOXES_ROOT" "$HOME/.config/opencode/skills/boxes"
-```
-
-For project-local registration, link the repository root as `.opencode/skills/boxes` instead. Do not configure the repository root itself as a skill source. V2 treats a source-root `SKILL.md` as the ID `SKILL`.
+The [usage reference](USAGE.md) covers runtime ownership and adding types. The [checks reference](USAGE.md#evidence-and-checks) describes the unit suite and real-Docker verifier.

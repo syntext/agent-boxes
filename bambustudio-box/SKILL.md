@@ -12,7 +12,7 @@ BOXES_SKILL_BASE='<skill-base>'
 BOXES_ROOT="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().parent)' "$BOXES_SKILL_BASE")"
 ```
 
-Run `"$BOXES_ROOT/box"` from any working directory. Start the desktop with `"$BOXES_ROOT/box" up bambu NAME --password boxbox`. Read [the Bambu reference](README.md) for the observed CLI launcher and preset requirements.
+Run `"$BOXES_ROOT/box"` from any working directory. Start the desktop with `"$BOXES_ROOT/box" up bambu NAME`. Omit `--password` to preserve saved credentials or generate a random password for a new box. Read [the Bambu reference](README.md) for the observed CLI launcher and preset requirements.
 
 Use type `bambu`. Inspect a screenshot before choosing input coordinates. The first-run setup wizard needs user choices. Do not guess a printer, account region, filament, or license acceptance.
 

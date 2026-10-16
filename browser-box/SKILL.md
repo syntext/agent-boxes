@@ -12,7 +12,7 @@ BOXES_SKILL_BASE='<skill-base>'
 BOXES_ROOT="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().parent)' "$BOXES_SKILL_BASE")"
 ```
 
-Run `"$BOXES_ROOT/box"` from any working directory. Start the desktop with `"$BOXES_ROOT/box" up browser NAME --password boxbox`.
+Run `"$BOXES_ROOT/box"` from any working directory. Start the desktop with `"$BOXES_ROOT/box" up browser NAME`. Omit `--password` to preserve saved credentials or generate a random password for a new box.
 
 Use type `browser`. Choose a named instance for an isolated profile. Chromium profile data persists in `/config`. User files belong in `/work`.
 

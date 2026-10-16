@@ -15,7 +15,7 @@ BOXES_ROOT="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.a
 Use `"$BOXES_ROOT/box"` from any working directory. No PATH entry or global CLI shim is needed. Read [the root reference](README.md) for options and security boundaries. Read the [browser](browser-box/SKILL.md), [Android](android-devbox/SKILL.md), or [Bambu Studio](bambustudio-box/SKILL.md) skill for app-specific commands.
 
 1. Select a type and instance name. Run `"$BOXES_ROOT/box" status TYPE NAME --json` or `"$BOXES_ROOT/box" list --json` before changing it.
-2. Start it with `"$BOXES_ROOT/box" up TYPE NAME --password boxbox` when needed. Pass the password explicitly for default and named instances. A new Android desktop does not start an emulator.
+2. Start it with `"$BOXES_ROOT/box" up TYPE NAME` when needed. Omit `--password` to preserve saved credentials or generate a random password for a new box. A new Android desktop does not start an emulator.
 3. Run `"$BOXES_ROOT/box" agent TYPE NAME state` and take a screenshot with `"$BOXES_ROOT/box" agent TYPE NAME screenshot --output /absolute/path.png`. Read the image before choosing coordinates.
 4. Send one deliberate action with `move`, `click`, `key`, `text`, or `scroll`. Read fresh state or a screenshot to verify the result. Input completion is asynchronous.
 5. Use `"$BOXES_ROOT/box" exec TYPE NAME -- COMMAND ARG...` for explicit noninteractive work. Use `shell` only for an interactive terminal.
@@ -40,8 +40,8 @@ just did, record the desktop while they act:
 2. Send no input while they work. The desktop has one pointer and keyboard.
 3. When they say they are done, run `"$BOXES_ROOT/box" record TYPE NAME stop`.
    It returns the recording directory, an annotated video, and a frame index.
-   Recordings are kept; the CLI never deletes one. `box record TYPE NAME forget
-   RECORDING` removes one, and only when the human asks.
+   Recordings are kept until `box record TYPE NAME forget RECORDING` removes one,
+   and only when the human asks.
 4. Read `events.jsonl` in the recording directory for what they did — clicks with
    their positions, drags, scrolls, and the text they typed — then read the
    frames the index names, in order, for what was on screen. Take the intent from

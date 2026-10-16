@@ -1,6 +1,6 @@
 # Bambu Studio box reference
 
-`"$BOXES_ROOT/box" up bambu [NAME] --password boxbox` starts the stock `lscr.io/linuxserver/bambustudio` amd64 image. Upstream launches the app. First startup shows Bambu Studio's setup wizard. Printer, filament, and account choices remain the user's decisions.
+`"$BOXES_ROOT/box" up bambu [NAME]` starts the stock `lscr.io/linuxserver/bambustudio` amd64 image. Upstream launches the app. First startup shows Bambu Studio's setup wizard. Printer, filament, and account choices remain the user's decisions.
 
 Set `BOXES_ROOT` using the [root README](../README.md#commands) or the skill tool's base directory as shown in the [Bambu skill](SKILL.md). The root README covers shared commands and security boundaries.
 

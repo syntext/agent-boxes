@@ -1,6 +1,6 @@
 # Android box reference
 
-`"$BOXES_ROOT/box" up android [NAME] --password boxbox` starts a labwc desktop with a terminal. The emulator stays stopped. This amd64 image needs `/dev/kvm`, but does not need privileged mode, host networking, or Android Studio.
+`"$BOXES_ROOT/box" up android [NAME]` starts a labwc desktop with a terminal. The emulator stays stopped. This amd64 image needs `/dev/kvm`, but does not need privileged mode, host networking, or Android Studio.
 
 Set `BOXES_ROOT` using the [root README](../README.md#commands) or the skill tool's base directory as shown in the [Android skill](SKILL.md).
 

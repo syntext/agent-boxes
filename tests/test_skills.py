@@ -76,9 +76,14 @@ class SkillPackagingTests(unittest.TestCase):
         self.assertEqual(cases["skill_name"], "boxes")
         self.assertEqual([case["id"] for case in cases["evals"]], [1, 2, 3, 4])
         for case in cases["evals"]:
-            self.assertIn("--password boxbox", case["expected_output"])
+            self.assertIn("Omits --password", case["expected_output"])
+            self.assertIn("preserve saved credentials", case["expected_output"])
+            self.assertNotIn("boxbox", case["expected_output"])
         for relative in SKILLS.values():
-            self.assertIn("--password boxbox", (ROOT / relative).read_text())
+            text = (ROOT / relative).read_text()
+            self.assertIn("Omit `--password` to preserve saved credentials", text)
+            self.assertIn("random password for a new box", text)
+            self.assertNotIn("boxbox", text)
 
     def test_local_markdown_links_resolve_from_each_source_base(self):
         for base in (ROOT, self.link):

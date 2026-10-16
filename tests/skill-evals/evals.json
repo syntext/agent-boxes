@@ -4,25 +4,25 @@
     {
       "id": 1,
       "prompt": "Open a separate browser box named research with my project at /absolute/project. Navigate to example.com and show the shared desktop screenshot. Do not expose CDP.",
-      "expected_output": "Loads boxes and browser-box from SKILL.md and browser-box/SKILL.md. Resolves BOXES_ROOT from the skill tool's base directory and invokes its absolute box path from any working directory. Uses browser research, passes --password boxbox explicitly when starting it, uses an existing absolute workspace, the core login and focus rules, desktop input, and a fresh screenshot. Does not enable a public CDP port.",
+      "expected_output": "Loads boxes and browser-box from SKILL.md and browser-box/SKILL.md. Resolves BOXES_ROOT from the skill tool's base directory and invokes its absolute box path from any working directory. Uses browser research, an existing absolute workspace, the core login and focus rules, desktop input, and a fresh screenshot. Omits --password to preserve saved credentials or generate a random password for a new box. Does not enable a public CDP port.",
       "files": []
     },
     {
       "id": 2,
       "prompt": "Check the default Android box. Start its emulator only if it is stopped, wait for boot, and show the Android screen. Do not accept any SDK licenses.",
-      "expected_output": "Loads boxes and android-devbox from SKILL.md and android-devbox/SKILL.md. Resolves BOXES_ROOT from the skill tool's base directory and invokes its absolute box path from any working directory. Reads emulator status, reports a missing SDK instead of accepting licenses, otherwise starts with a bounded wait, checks adb boot completion, and inspects a fresh shared screenshot. Passes --password boxbox explicitly if desktop startup is needed.",
+      "expected_output": "Loads boxes and android-devbox from SKILL.md and android-devbox/SKILL.md. Resolves BOXES_ROOT from the skill tool's base directory and invokes its absolute box path from any working directory. Reads emulator status, reports a missing SDK instead of accepting licenses, otherwise starts with a bounded wait, checks adb boot completion, and inspects a fresh shared screenshot. Omits --password to preserve saved credentials or generate a random password for a new box if desktop startup is needed.",
       "files": []
     },
     {
       "id": 3,
       "prompt": "Slice /work/project.3mf in the Bambu box and save the result without contacting a printer. Keep the source file unchanged.",
-      "expected_output": "Loads boxes and bambustudio-box from SKILL.md and bambustudio-box/SKILL.md. Resolves BOXES_ROOT from the skill tool's base directory and invokes its absolute box path from any working directory. Reads the installed AppRun help, uses the prepared 3MF presets or asks for missing settings, exports a separate result, verifies the archive, and sends no print job. Passes --password boxbox explicitly if desktop startup is needed.",
+      "expected_output": "Loads boxes and bambustudio-box from SKILL.md and bambustudio-box/SKILL.md. Resolves BOXES_ROOT from the skill tool's base directory and invokes its absolute box path from any working directory. Reads the installed AppRun help, uses the prepared 3MF presets or asks for missing settings, exports a separate result, verifies the archive, and sends no print job. Omits --password to preserve saved credentials or generate a random password for a new box if desktop startup is needed.",
       "files": []
     },
     {
       "id": 4,
       "prompt": "Watch me do this once, then do it yourself next time: I will rename the exported file in the browser box's workspace.",
-      "expected_output": "Loads boxes from SKILL.md. Resolves BOXES_ROOT from the skill tool's base directory and invokes its absolute box path from any working directory. Says that the screen and the typing will be recorded, offers the pause and resume commands for anything private, runs record TYPE NAME start (with --overlay only if asked), sends no input while the person works, and runs record TYPE NAME stop when they finish. Reads events.jsonl and the indexed frames rather than inventing actions, shows the drafted lesson, and saves it with lessons TYPE record SLUG only after the person agrees. Does not delete the recording, and treats the recording as private. Passes --password boxbox explicitly if desktop startup is needed.",
+      "expected_output": "Loads boxes from SKILL.md. Resolves BOXES_ROOT from the skill tool's base directory and invokes its absolute box path from any working directory. Says that the screen and the typing will be recorded, offers the pause and resume commands for anything private, runs record TYPE NAME start (with --overlay only if asked), sends no input while the person works, and runs record TYPE NAME stop when they finish. Reads events.jsonl and the indexed frames rather than inventing actions, shows the drafted lesson, and saves it with lessons TYPE record SLUG only after the person agrees. Does not delete the recording, and treats the recording as private. Omits --password to preserve saved credentials or generate a random password for a new box if desktop startup is needed.",
       "files": []
     }
   ]
