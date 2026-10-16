@@ -4,11 +4,12 @@ Boxes runs persistent desktop apps in Docker. You open the desktop in a browser 
 
 ## What you can do
 
-- Keep persistent named desktops with separate app settings, files, and credentials.
-- Share human and agent control of the same desktop through the web viewer and the Pelorus API.
-- Run explicit commands inside a box with `box exec` or open a shell with `box shell`.
-- Share a project through `/work` and add read-only or writable host mounts.
-- Record demonstrations and keep reusable Markdown lessons for agents.
+- Keep persistent named desktops. Each one has its own apps, files, credentials, and saved configuration.
+- Open a desktop in a browser over HTTPS and sign in with one account.
+- Control the same desktop from an agent, or run commands inside a box yourself.
+- Share a host project through `/work` and add read-only or writable mounts.
+- Record a demonstration and keep Markdown lessons so an agent can repeat the task later.
+- Manage several boxes, including updates, recreation, and removal.
 - Choose registered desktop types from [registry.json](registry.json). Each entry's `directory` contains its setup guide and agent skill.
 
 ## Requirements
@@ -57,6 +58,38 @@ Apps render inside the container. Selkies streams desktop output to your browser
 
 This generally keeps interaction responsive on a local or private network. That is an expectation from the design, not a measured performance result. Actual responsiveness depends on network latency and bandwidth, host CPU and GPU capacity or software rendering, the selected app, resolution, and frame rate. Software-rendered emulators can be a heavier workload.
 
+## Agent control
+
+An agent works on the same desktop through the box's authenticated port. It can read the current state and window list, take a screenshot, and send one move, click, key, text, or scroll action at a time.
+
+```sh
+"$BOXES_ROOT/box" agent "$TYPE" "$NAME" state
+"$BOXES_ROOT/box" agent "$TYPE" "$NAME" screenshot --output /absolute/screen.png
+"$BOXES_ROOT/box" agent "$TYPE" "$NAME" click 600 400
+printf '%s' 'example text' | "$BOXES_ROOT/box" agent "$TYPE" "$NAME" text
+"$BOXES_ROOT/box" agent "$TYPE" "$NAME" key Return
+```
+
+The human and the agent share one pointer, keyboard, and focus. An agent pauses while you take over, and it does not send input that competes with yours. Input is asynchronous, so an agent reads fresh state or a screenshot before the next action rather than assuming the previous one landed. The [agent control reference](USAGE.md#agent-control) lists every action, the API endpoints, and the known limits.
+
+## Learning from a demonstration
+
+A box can record its own desktop and the input that drives it. Show an agent a task once, and it can turn the recording into a lesson to repeat later.
+
+```sh
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" start
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" pause
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" resume
+"$BOXES_ROOT/box" record "$TYPE" "$NAME" stop
+"$BOXES_ROOT/box" lessons "$TYPE" list
+```
+
+`start` records the screen and logs the clicks, drags, scrolls, and keystrokes that reach the viewer. `pause` stops both, so you can type a password in private, and `resume` continues in a new segment.
+
+`stop` joins the segments and writes an annotated video, an event log, and a frame index into the instance's data directory. An agent reads those, drafts the lesson, shows it to you, and saves it only once you agree.
+
+Lessons are Markdown files. Every box of the same type shares them, so a workflow learned in one box is available in the others. The [recording reference](USAGE.md#recording-and-lessons) covers the file list, `forget`, and the tools the recording needs.
+
 ## Commands
 
 Set `BOXES_ROOT="$(pwd -P)"` in the repository root. You can then invoke `"$BOXES_ROOT/box"` from any directory. These examples reuse `TYPE` and `NAME` from the first run.
@@ -69,11 +102,20 @@ Set `BOXES_ROOT="$(pwd -P)"` in the repository root. You can then invoke `"$BOXE
 "$BOXES_ROOT/box" logs "$TYPE" "$NAME" --tail 100
 "$BOXES_ROOT/box" exec "$TYPE" "$NAME" -- id
 "$BOXES_ROOT/box" shell "$TYPE" "$NAME"
+"$BOXES_ROOT/box" mount "$TYPE" "$NAME" set /absolute/source /mnt/reference --mode ro
+"$BOXES_ROOT/box" mount "$TYPE" "$NAME" list
+"$BOXES_ROOT/box" update "$TYPE" "$NAME"
+"$BOXES_ROOT/box" recreate "$TYPE" "$NAME"
+"$BOXES_ROOT/box" remove "$TYPE" "$NAME"
 ```
 
-Save your app work before changing configuration. `stop` retains files and settings. Use `start` to return to the desktop. The `--` in `exec` separates the instance name from the command and its arguments.
+`stop` retains files and settings, and `start` returns you to the desktop. The `--` in `exec` separates the instance name from the command and its arguments. `mount set` binds an absolute host directory at `/work` or under `/mnt`, and `--mode ro` makes the mount read-only.
 
-The [command reference](USAGE.md#commands) covers recreation, updates, removal, and JSON output. See [workspaces and mounts](USAGE.md#persistent-configuration-and-mounts), [agent control](USAGE.md#agent-control), and [recording and lessons](USAGE.md#recording-and-lessons) for other tasks.
+`update` pulls the selected image or rebuilds a registered build, then recreates the container. `recreate` rebuilds the container from the current source and saved configuration. `remove` deletes the container and its Compose network, and keeps the saved configuration, credentials, and data.
+
+Save your app work before `update`, `recreate`, or a mount change. Each one replaces the running container. Data directories survive, but unsaved application state does not.
+
+`--image` and `--env` save an explicit image or upstream environment setting for the instance. `--bind` and `--port` choose the published listener, and `--http` selects the agent-only HTTP mode. The [command reference](USAGE.md#commands) covers every option and the JSON output for automation.
 
 ## Safety and persistence
 
@@ -81,7 +123,7 @@ Each named box keeps its own `/config`, `/work`, credentials, and saved configur
 
 Containers share the host kernel. They are not strong sandboxes for hostile code. A desktop can read its mounts and modify writable ones. Keep host secrets and Docker sockets out of untrusted sessions.
 
-The human and agent share one pointer, keyboard, and focus. An agent must pause when you take over. Recordings contain screen contents and typed text, so treat them and saved state as secrets. The [security reference](USAGE.md#security-boundaries) describes the limits.
+Recordings contain screen contents and typed text in full, so treat them and the saved state directory as secrets. The [security reference](USAGE.md#security-boundaries) describes the limits.
 
 ## Install as an agent skill
 
