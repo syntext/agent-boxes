@@ -1,0 +1,20 @@
+{
+  "environment": {
+    "DOCKER_MODS": "linuxserver/mods:universal-package-install",
+    "INSTALL_PACKAGES": "mousepad|imv",
+    "PIXELFLUX_WAYLAND": "true",
+    "PELORUS": "true",
+    "SELKIES_DESKTOP": "true",
+    "NO_GAMEPAD": "true",
+    "NO_STEAM": "true",
+    "NO_WEBCAM": "true",
+    "SELKIES_AUDIO_ENABLED": "false",
+    "SELKIES_MICROPHONE_ENABLED": "false",
+    "SELKIES_VIDEO_STREAMING_MODE": "false",
+    "SELKIES_FRAMERATE": "30",
+    "SELKIES_MANUAL_WIDTH": "1920",
+    "SELKIES_MANUAL_HEIGHT": "1080"
+  },
+  "shm_size": "1gb",
+  "stop_grace_period": "30s"
+}

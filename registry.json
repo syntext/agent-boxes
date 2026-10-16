@@ -1,0 +1,27 @@
+{
+  "browser": {
+    "directory": "browser-box",
+    "image": "lscr.io/linuxserver/chromium:latest",
+    "architectures": ["amd64", "arm64"],
+    "devices": [],
+    "environment": {"CHROME_CLI": "https://www.example.com"},
+    "commands": {"app": ["chromium"]}
+  },
+  "android": {
+    "directory": "android-devbox",
+    "image": "boxes/android:local",
+    "build": "android-devbox",
+    "architectures": ["amd64"],
+    "devices": ["/dev/kvm"],
+    "environment": {"DOCKER_MODS": "", "INSTALL_PACKAGES": ""},
+    "commands": {"emu": ["box-emulator"], "adb": ["adb"]}
+  },
+  "bambu": {
+    "directory": "bambustudio-box",
+    "image": "lscr.io/linuxserver/bambustudio:latest",
+    "architectures": ["amd64"],
+    "devices": [],
+    "environment": {},
+    "commands": {"app": ["/opt/bambustudio/AppRun"]}
+  }
+}
