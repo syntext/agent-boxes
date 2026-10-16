@@ -5,7 +5,7 @@ import ssl
 import time
 import urllib.request
 
-from .model import BoxError
+from .model import BoxError, scheme
 from .runtime import inspect, port
 
 
@@ -31,7 +31,7 @@ def request(instance, config, endpoint, payload=None):
     if not container or not container["State"]["Running"] or not published:
         raise BoxError("The instance has no running viewer listener.")
     address = config["bind"] if config["bind"] != "0.0.0.0" else "127.0.0.1"
-    https = config.get("https", True)
+    https = scheme(config) == "https"
     url = f"{'https' if https else 'http'}://{address}:{published}/pelorus/api/{endpoint}"
     auth = base64.b64encode(f"{config['user']}:{config['password']}".encode()).decode()
     headers = {"Authorization": "Basic " + auth, "Content-Type": "application/json"}

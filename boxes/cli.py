@@ -30,7 +30,7 @@ def parser():
             p.add_argument("--image")
             p.add_argument("--password", help="Set the box account password; omitted retains saved credentials")
             p.add_argument("--tls-verify", action=argparse.BooleanOptionalAction, default=None)
-            p.add_argument("--https", action=argparse.BooleanOptionalAction, default=None)
+            p.add_argument("--http", action=argparse.BooleanOptionalAction, default=None)
             p.add_argument("--wait", type=int, default=180, metavar="SECONDS")
         if command == "status":
             p.add_argument("--json", action="store_true")
@@ -64,10 +64,12 @@ def configure(args, config):
     if args.password is not None:
         if not args.password or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in args.password):
             raise BoxError("--password must be nonempty and contain no control characters.")
+        if args.password.startswith("-"):
+            raise BoxError("--password must not begin with a hyphen.")
         config["password"] = args.password
     if not 1 <= args.wait <= 900:
         raise BoxError("--wait must be between 1 and 900 seconds.")
-    for key in ("bind", "port", "image", "https", "tls_verify"):
+    for key in ("bind", "port", "image", "http", "tls_verify"):
         value = getattr(args, key, None)
         if value is not None:
             if key == "port" and not 1 <= value <= 65535:

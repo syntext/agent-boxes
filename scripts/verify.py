@@ -23,13 +23,13 @@ def main():
     parser.add_argument("--types", nargs="+", choices=["browser", "bambu", "android"], default=["browser", "bambu", "android"])
     parser.add_argument("--sdk-seed", type=Path)
     parser.add_argument("--viewer", action="store_true", help="Also render the shared desktop with agent-browser")
-    parser.add_argument("--https", action="store_true", help="Verify boxes on the HTTPS viewer port instead of the default HTTP one")
+    parser.add_argument("--http", action="store_true", help="Verify boxes on the opt-in HTTP viewer port instead of the default HTTPS one")
     parser.add_argument("--keep-running", action="store_true")
     args = parser.parse_args()
-    scheme = "https" if args.https else "http"
-    internal = 3001 if args.https else 3000
-    context = ssl._create_unverified_context() if args.https else None
-    tls = ["--https"] if args.https else []
+    scheme = "http" if args.http else "https"
+    internal = 3000 if args.http else 3001
+    context = None if args.http else ssl._create_unverified_context()
+    plain = ["--http"] if args.http else []
     directory = Path.home() / "work/boxes/verification" / (time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(3))
     directory.mkdir(parents=True)
     environment = os.environ | {"BOXES_STATE_DIR": str(directory / "state"), "BOXES_DATA_DIR": str(directory / "data"),
@@ -85,7 +85,7 @@ def main():
         session = environment["BOXES_PROJECT_PREFIX"] + "-" + kind
         private = directory / f"viewer-{kind}.json"
         auth = base64.b64encode(f'{config["user"]}:{config["password"]}'.encode()).decode()
-        private.write_text(json.dumps({"session": session, "ignoreHttpsErrors": args.https,
+        private.write_text(json.dumps({"session": session, "ignoreHttpsErrors": not args.http,
                                       "headers": json.dumps({"Authorization": "Basic " + auth})}))
         private.chmod(0o600)
         command = ["agent-browser", "--config", str(private)]
@@ -108,7 +108,7 @@ def main():
     try:
         for kind in args.types:
             instances.append((kind, "first"))
-            status = box("up", kind, "first", *tls)
+            status = box("up", kind, "first", *plain)
             initial = inspect(kind)
             ready(kind)
             check(f"{kind} running with agent API", status["state"] == "running")
@@ -153,8 +153,8 @@ def main():
                     code = error.code
                     error.close()
                 check(f"{kind} authentication protects {request.get_method()} {request.selector}", code == 401)
-            connection = (http.client.HTTPSConnection if args.https else http.client.HTTPConnection)(
-                "localhost", status["port"], **({"context": context} if args.https else {}), timeout=15)
+            connection = (http.client.HTTPConnection if args.http else http.client.HTTPSConnection)(
+                "localhost", status["port"], **({} if args.http else {"context": context}), timeout=15)
             try:
                 connection.request("GET", "/api/websockets", headers={
                     "Connection": "Upgrade", "Upgrade": "websocket", "Sec-WebSocket-Version": "13",
@@ -269,7 +269,7 @@ def main():
                     report["checks"].append({"name": "Android boot", "skipped": "Supply --sdk-seed or provision a licensed SDK separately."})
         if "browser" in args.types:
             instances.append(("browser", "second"))
-            box("up", "browser", "second", *tls)
+            box("up", "browser", "second", *plain)
             ready("browser", "second")
             second = box("exec", "browser", "second", "--", "sh", "-c", "test ! -e /config/marker && test ! -e /work/marker && printf isolated", parse=False)
             check("Browser instance data isolation", second == "isolated")

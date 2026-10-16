@@ -52,6 +52,14 @@ class LifecycleTests(unittest.TestCase):
                 self.instance.save(saved)
                 self.assertTrue(self.instance.load()["password"] == "fixture-雪-password")
 
+    def test_password_starting_with_a_hyphen_is_rejected_before_startup(self):
+        output = io.StringIO()
+        with patch.object(runtime, "ensure") as ensure, contextlib.redirect_stderr(output):
+            self.assertEqual(cli.main(["up", "browser", "--password=-fixture"]), 1)
+        ensure.assert_not_called()
+        self.assertEqual(output.getvalue(), "box: --password must not begin with a hyphen.\n")
+        self.assertTrue(self.instance.load()["password"] == self.config["password"])
+
     def test_new_instance_omitted_password_retains_random_fallback(self):
         other = Instance(box_type("browser"), "other").load(create=True)
         original = other["password"]
@@ -240,7 +248,7 @@ class LifecycleTests(unittest.TestCase):
         container = {"State": {"Running": True},
                      "NetworkSettings": {"Ports": {"3000/tcp": [{"HostPort": "39223"}]}}}
         config = {"bind": "0.0.0.0", "user": "box", "password": "boxbox",
-                  "https": False, "tls_verify": False}
+                  "http": True, "tls_verify": False}
         with patch.object(agent, "inspect", return_value=container), \
              patch("urllib.request.build_opener") as build:
             build.return_value.open.side_effect = ConnectionResetError(104, "Connection reset by peer")
@@ -251,7 +259,7 @@ class LifecycleTests(unittest.TestCase):
         container = {"State": {"Running": True},
                      "NetworkSettings": {"Ports": {"3001/tcp": [{"HostPort": "39223"}]}}}
         config = {"bind": "0.0.0.0", "user": "box", "password": "boxbox",
-                  "https": True, "tls_verify": False}
+                  "http": False, "tls_verify": False}
         with patch.object(agent, "inspect", return_value=container), \
              patch("urllib.request.build_opener") as build:
             build.return_value.open.return_value = io.BytesIO(b'{"state": "ok"}')
@@ -260,6 +268,20 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(request.full_url, "https://127.0.0.1:39223/pelorus/api/state")
         self.assertEqual([type(handler) for handler in build.call_args.args],
                          [urllib.request.ProxyHandler, urllib.request.HTTPSHandler])
+
+    def test_http_requests_skip_the_tls_handler(self):
+        container = {"State": {"Running": True},
+                     "NetworkSettings": {"Ports": {"3000/tcp": [{"HostPort": "39223"}]}}}
+        config = {"bind": "0.0.0.0", "user": "box", "password": "boxbox",
+                  "http": True, "tls_verify": False}
+        with patch.object(agent, "inspect", return_value=container), \
+             patch("urllib.request.build_opener") as build:
+            build.return_value.open.return_value = io.BytesIO(b'{"state": "ok"}')
+            agent.request(self.instance, config, "state")
+            request = build.return_value.open.call_args.args[0]
+        self.assertEqual(request.full_url, "http://127.0.0.1:39223/pelorus/api/state")
+        self.assertEqual([type(handler) for handler in build.call_args.args],
+                         [urllib.request.ProxyHandler])
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from boxes.cli import configure, parser
-from boxes.model import BoxError, Instance, atomic_json, box_type, env_pair, mount, validate_mounts
+from boxes.model import BoxError, Instance, atomic_json, box_type, env_pair, mount, new_password, validate_mounts
 from boxes.runtime import inspect
 
 
@@ -34,23 +34,29 @@ class ModelTests(unittest.TestCase):
         self.assertEqual((config["environment"], config["port"]), ({"TZ": "Europe/Amsterdam"}, 41001))
         self.assertEqual((reopened.directory / "instance.json").stat().st_mode & 0o777, 0o600)
         self.assertEqual(reopened.compose(config)["services"]["desktop"]["ports"],
-                         [{"target": 3000, "published": "41001", "host_ip": "0.0.0.0", "protocol": "tcp"}])
+                         [{"target": 3001, "published": "41001", "host_ip": "0.0.0.0", "protocol": "tcp"}])
 
-    def test_https_is_opt_in_and_legacy_configs_keep_https(self):
-        instance = Instance(box_type("browser"), "tls")
+    def test_generated_passwords_avoid_a_leading_hyphen(self):
+        with patch("boxes.model.secrets.token_urlsafe", side_effect=["-openssl-option", "-again", "usable"]):
+            self.assertEqual(new_password(), "usable")
+        self.assertFalse(new_password().startswith("-"))
+
+    def test_http_is_opt_in_and_new_instances_use_https(self):
+        instance = Instance(box_type("browser"), "plain")
         config = instance.load(create=True)
-        self.assertFalse(config["https"])
-        configure(parser().parse_args(["up", "browser", "tls", "--https"]), config)
+        self.assertFalse(config["http"])
+        configure(parser().parse_args(["up", "browser", "plain", "--http"]), config)
         instance.save(config)
-        self.assertEqual(instance.load()["https"], True)
+        self.assertEqual(instance.load()["http"], True)
         self.assertEqual(instance.compose(config)["services"]["desktop"]["ports"],
-                         [{"target": 3001, "published": "0", "host_ip": "0.0.0.0", "protocol": "tcp"}])
-        configure(parser().parse_args(["up", "browser", "tls", "--no-https"]), config)
-        self.assertEqual(instance.compose(config)["services"]["desktop"]["ports"][0]["target"], 3000)
+                         [{"target": 3000, "published": "0", "host_ip": "0.0.0.0", "protocol": "tcp"}])
+        configure(parser().parse_args(["up", "browser", "plain", "--no-http"]), config)
+        self.assertEqual(instance.compose(config)["services"]["desktop"]["ports"][0]["target"], 3001)
         legacy = instance.load(create=False)
-        del legacy["https"]
+        del legacy["http"]
         instance.save(legacy)
-        self.assertTrue(instance.load()["https"])
+        self.assertFalse(instance.load()["http"])
+        self.assertEqual(instance.compose(instance.load())["services"]["desktop"]["ports"][0]["target"], 3001)
 
     def test_new_instance_binds_all_interfaces_unless_overridden(self):
         instance = Instance(box_type("browser"), "loopback")

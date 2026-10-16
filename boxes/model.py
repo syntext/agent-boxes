@@ -52,12 +52,19 @@ def identifier(value: str) -> str:
     return value
 
 
+def new_password() -> str:
+    while True:
+        value = secrets.token_urlsafe(32)
+        if not value.startswith("-"):
+            return value
+
+
 def scheme(config: dict) -> str:
-    return "https" if config.get("https", True) else "http"
+    return "http" if config.get("http", False) else "https"
 
 
 def viewer_port(config: dict) -> int:
-    return 3001 if scheme(config) == "https" else 3000
+    return 3000 if scheme(config) == "http" else 3001
 
 
 def atomic_json(path: Path, value: object) -> None:
@@ -177,7 +184,7 @@ class Instance:
             if value.get("version") != 1 or value.get("type") != self.kind.name or value.get("name") != self.name:
                 raise BoxError(f"Invalid instance configuration {path}.")
             self.validate_data(Path(value["data"]))
-            value.setdefault("https", True)
+            value.setdefault("http", False)
             return value
         if not create:
             raise BoxError("Instance is not configured. Run box up first.")
@@ -186,8 +193,8 @@ class Instance:
         value = {"version": 1, "type": self.kind.name, "name": self.name,
                  "data": str(self.data), "bind": "0.0.0.0", "port": None,
                  "environment": {}, "mounts": [], "image": None,
-                 "user": "box", "password": secrets.token_urlsafe(32),
-                 "tls_verify": False, "https": False, "published_port": None}
+                 "user": "box", "password": new_password(),
+                 "tls_verify": False, "http": False, "published_port": None}
         self.save(value)
         return value
 

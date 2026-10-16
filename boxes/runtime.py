@@ -73,7 +73,7 @@ def status(instance: Instance, config: dict, container: dict | None = None) -> d
             "bind": config["bind"], "port": published,
             "config_file": str(instance.directory / "instance.json"),
             "data": config["data"], "mounts": config["mounts"],
-            "https": scheme(config) == "https",
+            "scheme": scheme(config),
             "tls_verify": config["tls_verify"]}
 
 
