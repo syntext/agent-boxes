@@ -135,7 +135,7 @@ def control(instance, config, arguments):
     scroll.add_argument("direction", choices=["up", "down", "left", "right"])
     scroll.add_argument("amount", type=int)
     raw = sub.add_parser("control")
-    raw.add_argument("json", help="ControlRequest JSON from the upstream OpenAPI contract")
+    raw.add_argument("json", help="Control action JSON for the computer-use backend")
     args = p.parse_args(arguments)
     operation = args.operation
     if operation in {"state", "windows"}:

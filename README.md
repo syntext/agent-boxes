@@ -122,12 +122,12 @@ printf '%s' 'example text' | "$BOXES_ROOT/box" agent "$TYPE" "$NAME" text
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" key Return
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" scroll down 3
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" explore 1234
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" control '{"action":"left_click_drag","start_coordinate":[100,100],"end_coordinate":[300,300]}'
+"$BOXES_ROOT/box" agent "$TYPE" "$NAME" control '{"action":"left_click_drag","start_coordinate":[100,100],"coordinate":[300,300]}'
 ```
 
-These commands use the upstream `/pelorus/api/state`, `/windows`, `/desktop/screenshot`, `/desktop/explore/{pid}`, and `/desktop/control` endpoints through the authenticated viewer port. `screenshot` without `--output` returns the upstream base64 JSON. `text` without an argument reads stdin. A positional text argument is visible to host process inspection. Do not put secrets in positional arguments.
+These commands use the upstream `/pelorus/api/state`, `/windows`, `/desktop/screenshot`, `/desktop/explore/{pid}`, and `/desktop/control` endpoints through the authenticated viewer port. `screenshot` without `--output` returns the upstream base64 JSON. `text` without an argument reads stdin. A positional text argument is visible to host process inspection. Do not put secrets in positional arguments. `control` sends the payload to Pelorus unchanged. Use the field names the computer-use backend reads. The upstream contract declares `end_coordinate` for drags, but the backend reads `coordinate`.
 
-Input is asynchronous. Observe a fresh screenshot or app state before the next consequential action. `cursor_position` returns HTTP 500 in the benchmarked upstream version. Menu text can be absent from `state`. Neither behavior is hidden or replaced with invented state. Use screenshots when accessibility data is incomplete.
+Input is asynchronous. Observe a fresh screenshot or app state before the next consequential action. Pelorus returns HTTP 500 for any computer-use response that omits `result`. `cursor_position` returns only `text`, so it fails. Menu text can be absent from `state`. No failure is hidden or replaced with invented state. Use screenshots when accessibility data is incomplete.
 
 The human and agent share one focus, pointer, and keyboard. An agent must pause on human takeover and wait for permission before resuming. There is no automatic ownership arbitration. Do not send conflicting input from multiple agents.
 
