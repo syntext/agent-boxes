@@ -54,13 +54,13 @@ def main():
         report["checks"].append({"name": name, "passed": True})
         print("PASS " + name, flush=True)
 
-    def box(*arguments, parse=True, succeeds=True):
+    def box(*arguments, parse=True, succeeds=True, input=None):
         logged = list(map(str, arguments))
         for index, value in enumerate(logged[:-1]):
             if value == "--password":
                 logged[index + 1] = "<redacted>"
         result = subprocess.run([str(ROOT / "box"), *map(str, arguments)], env=environment,
-                                capture_output=True, text=True, cwd=ROOT)
+                                capture_output=True, text=True, cwd=ROOT, input=input)
         with (directory / "commands.log").open("a") as log:
             log.write(json.dumps(logged) + "\n" + result.stderr + "\n")
         if succeeds and result.returncode:
@@ -84,7 +84,6 @@ def main():
         return json.loads(subprocess.check_output(["docker", "inspect", project]))[0]
 
     def recording(kind, config, status):
-        """Record a segment, drive input as a viewer does, and inspect the result."""
         container = status["project"]
         subprocess.run(["docker", "cp", str(ROOT / "scripts/viewer_input.py"), f"{container}:/work/viewer-input.py"],
                        check=True, capture_output=True)
@@ -99,13 +98,14 @@ def main():
         check(f"{kind} live overlay runs", running not in {"", "0"})
         check(f"{kind} live overlay has no startup error",
               "foreign struct converter" not in tools and "Traceback" not in tools)
-        send = ("python3", "/work/viewer-input.py", str(3000 if args.http else 3001), config["user"], config["password"])
-        box("exec", kind, "first", "--", *send, parse=False)
+        send = ("python3", "/work/viewer-input.py", "--transport", scheme, "--port", str(internal))
+        credentials = json.dumps({key: config[key] for key in ("user", "password")})
+        box("exec", kind, "first", "--", *send, parse=False, input=credentials)
         paused = box("record", kind, "first", "pause")
         check(f"{kind} recording pauses", paused["paused"] is True)
-        box("exec", kind, "first", "--", *send, parse=False)
+        box("exec", kind, "first", "--", *send, parse=False, input=credentials)
         box("record", kind, "first", "resume")
-        box("exec", kind, "first", "--", *send, parse=False)
+        box("exec", kind, "first", "--", *send, parse=False, input=credentials)
         stopped = box("record", kind, "first", "stop")
         check(f"{kind} recording captured input", stopped["events"] > 0)
         check(f"{kind} pause split the recording into two segments", stopped["segments"] == 2)
@@ -188,7 +188,7 @@ def main():
             config = json.loads(Path(status["config_file"]).read_text())
             check(f"{kind} password absent from status", config["password"] not in json.dumps(status))
             old_password = config["password"]
-            replacement = secrets.token_urlsafe(32)
+            replacement = "verify-" + secrets.token_urlsafe(32)
             rotated = box("up", kind, "first", "--password", replacement, "--wait", "900")
             config = json.loads(Path(status["config_file"]).read_text())
             check(f"{kind} supplied password saved", config["password"] == replacement)

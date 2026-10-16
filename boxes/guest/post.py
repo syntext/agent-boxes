@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""Turn a finished recording into an annotated video and a frame index.
-
-Run inside the box, which has the recording, ffmpeg, and ffprobe. It writes:
-
-  screen.mp4            the segments joined, if the recording was paused
-  screen-annotated.mp4  the same video with clicks, drags, scrolls, and typing
-  frames/NNNN.jpg       a frame just before and just after each click, plus one
-                        for each scene change and each idle second
-  index.json            each frame's time in the recording and why it was kept
-
-The recorded video holds only the parts of the session that were recorded, so an
-event's place in it is its offset into the segment that covers it.
-"""
-
 import argparse
 import json
 import re
@@ -93,13 +79,11 @@ def key_caption(event):
 class Timeline:
     """Map wall-clock moments onto the joined recording."""
 
-    def __init__(self, starts, lengths, lead=0.35, tail=2.5):
+    def __init__(self, starts, lengths):
         self.spans, self.total = [], 0.0
         for start, length in zip(starts, lengths):
             self.spans.append((start - 1.0, start + length, self.total, length))
             self.total += length
-        self.lead = lead
-        self.tail = tail
 
     def at(self, moment, duration=None):
         """The moment in the recording, or None when it falls outside it."""
@@ -110,10 +94,6 @@ class Timeline:
                     return None
                 return place
         return None
-
-    def lead_in(self, moment):
-        return self.at(moment - self.lead) or 0.0
-
 
 def subtitles(events, timeline):
     lines = ["[Script Info]", "ScriptType: v4.00+", "PlayResX: 1920", "PlayResY: 1080", "WrapStyle: 2", "",
@@ -197,7 +177,6 @@ def extract(video, at, destination):
 
 
 def keyframes(video, events, timeline, total, scene, minimum):
-    """Pick the moments worth reading later: around each click, scene changes, and idle seconds."""
     chosen = []
 
     def keep(moment):
@@ -227,7 +206,6 @@ def main():
     parser.add_argument("--directory", required=True, type=Path)
     parser.add_argument("--events", required=True, type=Path)
     parser.add_argument("--recording", required=True, type=Path, help="The recording state written by the host")
-    parser.add_argument("--lead", type=float, default=0.35)
     parser.add_argument("--scene", type=float, default=0.12)
     parser.add_argument("--minimum-frames", type=int, default=12)
     arguments = parser.parse_args()
@@ -250,7 +228,7 @@ def main():
     if not has_frames(joined):
         raise RuntimeError("The recording contains no video frames.")
 
-    timeline = Timeline(starts, lengths, arguments.lead)
+    timeline = Timeline(starts, lengths)
     events = load_events(arguments.events)
     pressed = any(event.get("event") == "click" for event in events)
     brightness = mean_brightness(joined)

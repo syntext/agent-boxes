@@ -116,7 +116,6 @@ def verify_overlay(instance: Instance):
 
 
 def prepare(instance: Instance):
-    """Put the guest tools in the box, once per instance."""
     execute(instance, ["mkdir", "-p", f"{CONTAINER_ROOT}/guest"])
     for name in GUEST_FILES:
         result = runtime.run(["docker", "cp", str(GUEST / name), f"{instance.project}:{guest(name)}"],
@@ -333,11 +332,14 @@ def list_recordings(instance: Instance) -> dict:
 
 
 def forget(instance: Instance, name: str) -> dict:
-    """Remove one recording a person asked to delete. Recordings are kept otherwise."""
     root = recordings_root(instance)
     directory = root / name
-    if directory.parent != root or not directory.is_dir():
+    if (not name or name in {".", ".."} or Path(name).name != name or "\x00" in name
+            or directory.is_symlink() or directory.resolve().parent != root.resolve() or not directory.is_dir()):
         raise BoxError(f"No recording named {name!r}.")
+    current = active(instance)
+    if current and current["name"] == name:
+        raise BoxError("Cannot forget the active recording. Stop it first.")
     shutil.rmtree(directory)
     return {"removed": str(directory)}
 

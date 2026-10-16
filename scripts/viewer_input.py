@@ -3,35 +3,43 @@
 
 Used to prove the tap reads real viewer input without a browser in the loop.
 """
+import argparse
 import base64
+import json
 import os
 import socket
 import ssl
 import sys
 import time
 
-host = "127.0.0.1"
-port = int(sys.argv[1]) if len(sys.argv) > 1 else 3001
-user, password = "box", "boxbox"
-if len(sys.argv) > 3:
-    user, password = sys.argv[2], sys.argv[3]
-
-plain = socket.create_connection((host, port), 10)
-context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-context.check_hostname = False
-context.verify_mode = ssl.CERT_NONE
-tls = context.wrap_socket(plain, server_hostname=host)
-key = base64.b64encode(os.urandom(16)).decode()
-auth = base64.b64encode(f"{user}:{password}".encode()).decode()
-tls.sendall((f"GET /api/websockets HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n"
-             f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n"
-             f"Authorization: Basic {auth}\r\n\r\n").encode())
-time.sleep(0.6)
-try:
-    tls.recv(16384)
-except OSError:
-    pass
-print("handshake", tls.version() if hasattr(tls, "version") else "tls")
+def connect(transport, port, user, password):
+    host = "127.0.0.1"
+    connection = socket.create_connection((host, port), 10)
+    try:
+        if transport == "https":
+            # The upstream box serves a self-signed certificate on loopback.
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            connection = context.wrap_socket(connection, server_hostname=host)
+        key = base64.b64encode(os.urandom(16)).decode()
+        auth = base64.b64encode(f"{user}:{password}".encode()).decode()
+        connection.sendall((f"GET /api/websockets HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n"
+                            f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n"
+                            f"Authorization: Basic {auth}\r\n\r\n").encode())
+        response = b""
+        while b"\r\n\r\n" not in response:
+            chunk = connection.recv(4096)
+            if not chunk or len(response) + len(chunk) > 16384:
+                raise RuntimeError("Incomplete websocket upgrade response")
+            response += chunk
+        status = response.split(b"\r\n", 1)[0].split()
+        if len(status) < 2 or status[0] != b"HTTP/1.1" or status[1] != b"101":
+            raise RuntimeError("Viewer refused the websocket upgrade")
+        return connection
+    except BaseException:
+        connection.close()
+        raise
 
 
 def frame(text):
@@ -54,9 +62,21 @@ messages = [
     "kd,65293", "ku,65293",     # Return
     "kd,65507", "kd,108", "ku,108", "ku,65507",   # Ctrl+L
 ]
-for message in messages:
-    tls.sendall(frame(message))
-    time.sleep(0.2)
-time.sleep(0.5)
-tls.close()
-print("sent", len(messages))
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--transport", choices=("https", "http"), default="https")
+    parser.add_argument("--port", type=int)
+    arguments = parser.parse_args()
+    credentials = json.load(sys.stdin)
+    port = arguments.port or (3001 if arguments.transport == "https" else 3000)
+    with connect(arguments.transport, port, credentials["user"], credentials["password"]) as connection:
+        print("handshake", arguments.transport)
+        for message in messages:
+            connection.sendall(frame(message))
+            time.sleep(0.2)
+        time.sleep(0.5)
+    print("sent", len(messages))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

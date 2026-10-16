@@ -12,6 +12,11 @@ from boxes.runtime import inspect
 
 
 class ModelTests(unittest.TestCase):
+    def test_unknown_type_choices_come_from_the_registry(self):
+        with patch("boxes.model.registry", return_value={"studio": box_type("bambu")}):
+            with self.assertRaisesRegex(BoxError, r"Choose from studio\.$"):
+                box_type("unknown")
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.directory = Path(self.temporary.name)

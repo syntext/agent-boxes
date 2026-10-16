@@ -227,9 +227,9 @@ def main(argv=None):
         args.command = "list"
     try:
         if args.command == "list":
-            sample = Instance(box_type("browser"))
             results = []
             for kind in registry().values():
+                sample = Instance(kind)
                 for path in sorted((sample.state_root / kind.name).glob("*/instance.json")):
                     instance = Instance(kind, path.parent.name)
                     with instance.lock():

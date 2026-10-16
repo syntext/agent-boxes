@@ -40,10 +40,11 @@ def registry() -> dict[str, BoxType]:
 
 
 def box_type(value: str) -> BoxType:
-    for item in registry().values():
+    types = registry()
+    for item in types.values():
         if value in (item.name, item.directory):
             return item
-    raise BoxError(f"Unknown type {value!r}. Choose browser, android, or bambu.")
+    raise BoxError(f"Unknown type {value!r}. Choose from {', '.join(types)}.")
 
 
 def identifier(value: str) -> str:

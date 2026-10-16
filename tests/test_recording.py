@@ -7,13 +7,13 @@ import struct
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from boxes import cli, recording
 
 
-def load(name):
-    path = Path(__file__).resolve().parents[1] / "boxes/guest" / f"{name}.py"
+def load(name, directory="boxes/guest"):
+    path = Path(__file__).resolve().parents[1] / directory / f"{name}.py"
     spec = importlib.util.spec_from_file_location(f"guest_{name}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -22,6 +22,49 @@ def load(name):
 
 tap = load("tap")
 post = load("post")
+viewer_input = load("viewer_input", "scripts")
+
+
+class ViewerInputTests(unittest.TestCase):
+    def test_http_uses_the_plain_socket_and_waits_for_the_upgrade(self):
+        connection = Mock()
+        connection.recv.side_effect = [b"HTTP/1.1 101 Switching", b" Protocols\r\n\r\n"]
+        with patch.object(viewer_input.socket, "create_connection", return_value=connection) as create, \
+                patch.object(viewer_input.ssl, "SSLContext") as tls:
+            self.assertIs(viewer_input.connect("http", 3000, "test-user", "test-password"), connection)
+        create.assert_called_once_with(("127.0.0.1", 3000), 10)
+        tls.assert_not_called()
+        self.assertIn(b"Authorization: Basic dGVzdC11c2VyOnRlc3QtcGFzc3dvcmQ=\r\n", connection.sendall.call_args.args[0])
+
+    def test_https_wraps_the_socket_before_the_upgrade(self):
+        plain, encrypted, context = Mock(), Mock(), Mock()
+        context.wrap_socket.return_value = encrypted
+        encrypted.recv.return_value = b"HTTP/1.1 101 Switching Protocols\r\n\r\n"
+        with patch.object(viewer_input.socket, "create_connection", return_value=plain), \
+                patch.object(viewer_input.ssl, "SSLContext", return_value=context):
+            self.assertIs(viewer_input.connect("https", 3001, "user", "secret"), encrypted)
+        context.wrap_socket.assert_called_once_with(plain, server_hostname="127.0.0.1")
+        plain.sendall.assert_not_called()
+        encrypted.sendall.assert_called_once()
+
+    def test_failed_or_incomplete_upgrade_closes_the_socket(self):
+        for response in (b"HTTP/1.1 401 Unauthorized\r\n\r\n", b"HTTP/1.1 200 OK\r\n\r\n", b""):
+            connection = Mock()
+            connection.recv.return_value = response
+            with self.subTest(response=response), \
+                    patch.object(viewer_input.socket, "create_connection", return_value=connection):
+                with self.assertRaises(RuntimeError):
+                    viewer_input.connect("http", 3000, "user", "secret")
+                connection.close.assert_called_once()
+
+    def test_main_defaults_to_https_and_reads_credentials_from_stdin(self):
+        import io
+        with patch.object(viewer_input.sys, "argv", ["viewer_input.py"]), \
+                patch.object(viewer_input.sys, "stdin", io.StringIO('{"user":"test","password":"private"}')), \
+                patch.object(viewer_input, "connect") as connect, \
+                patch.object(viewer_input.time, "sleep"), patch("builtins.print"):
+            viewer_input.main()
+        connect.assert_called_once_with("https", 3001, "test", "private")
 
 
 def websocket(payload, opcode=1, mask=b"\x01\x02\x03\x04"):
@@ -52,7 +95,7 @@ class TapParsingTests(unittest.TestCase):
                 translator.key(int(fields[1]), kind == "kd")
             elif kind in {"m", "m2"}:
                 x, y, mask, scroll = (int(value) for value in fields[1:5])
-                translator.pointer(x, y, mask, tap.clamp_scroll(scroll), relative=kind == "m2")
+                translator.pointer(x, y, mask, tap.scroll_count(scroll), relative=kind == "m2")
         return events
 
     def test_click_press_release_and_drag_origin(self):
@@ -112,6 +155,17 @@ class TapParsingTests(unittest.TestCase):
 
 
 class PacketTests(unittest.TestCase):
+    def test_out_of_order_chunks_drain_without_losing_the_next_frame(self):
+        sniffer, events = self.sniffer()
+        frame = websocket("kd,104") + websocket("ku,104")
+        sniffer.packet(segment(1000, frame[:4]))
+        sniffer.packet(segment(1012, frame[12:]))
+        sniffer.packet(segment(1004, frame[4:12]))
+        self.assertEqual(next(iter(sniffer.connections.values()))["next"], 1024)
+        sniffer.packet(segment(1024, websocket("kd,105")))
+        self.assertEqual([event["event"] for event in events], ["key", "text", "key", "key"])
+        self.assertEqual(events[-1]["name"], "i")
+
     def sniffer(self):
         events = []
         return tap.Sniffer(["lo"], lambda event, **fields: events.append({"event": event, **fields})), events
@@ -155,7 +209,6 @@ class PacketTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
 
     def test_a_segment_that_arrives_after_later_bytes_is_ignored(self):
-        """A late retransmit must not replay messages that were already read."""
         sniffer, events = self.sniffer()
         first, second = websocket("m,11,22,0,0,1"), websocket("kd,104")
         sniffer.packet(segment(6000, first))
@@ -170,7 +223,6 @@ class PacketTests(unittest.TestCase):
         self.assertEqual([event["event"] for event in events], ["move"])
 
     def test_a_lost_segment_does_not_stall_the_connection(self):
-        """The whole point: a dropped packet must not silence the rest of the session."""
         sniffer, events = self.sniffer()
         missed = websocket("m,1,1,0,0,1")
         later = websocket("kd,104") + websocket("ku,104")
@@ -195,9 +247,9 @@ class PacketTests(unittest.TestCase):
 
 
 class ShutdownTests(unittest.TestCase):
-    def test_the_stop_handler_asks_the_loop_to_finish(self):
+    def test_the_stop_handlers_ask_the_loop_to_finish(self):
         stopping = {"asked": False}
-        tap.stop_handler(stopping)
+        tap.install_stop_handlers(stopping)
         self.assertFalse(stopping["asked"])
         os.kill(os.getpid(), signal.SIGTERM)
         for _ in range(50):
@@ -217,7 +269,7 @@ class ShutdownTests(unittest.TestCase):
 
 class SubtitleTests(unittest.TestCase):
     def timeline(self):
-        return post.Timeline([1000.0, 1200.0], [10.0, 5.0], lead=0.35)
+        return post.Timeline([1000.0, 1200.0], [10.0, 5.0])
 
     def test_pauses_do_not_shift_later_events(self):
         timeline = self.timeline()
@@ -297,6 +349,37 @@ class RecordingLayoutTests(unittest.TestCase):
             recording.forget(self.instance, "../escape")
         recording.forget(self.instance, directory.name)
         self.assertFalse(directory.exists())
+
+    def test_forget_rejects_paths_and_preserves_siblings(self):
+        root = recording.recordings_root(self.instance)
+        root.mkdir(parents=True)
+        sentinel = root.parent / "sentinel"
+        sentinel.write_text("keep")
+        for name in ("..", ".", "", str(root), "/", "child/..", "../sentinel", "child/"):
+            with self.subTest(name=name), self.assertRaisesRegex(Exception, "No recording"):
+                recording.forget(self.instance, name)
+            self.assertEqual(sentinel.read_text(), "keep")
+            self.assertTrue(root.is_dir())
+
+    def test_forget_rejects_symlinks(self):
+        root = recording.recordings_root(self.instance)
+        target = root / "kept"
+        target.mkdir(parents=True)
+        sentinel = target / "sentinel"
+        sentinel.write_text("keep")
+        (root / "link").symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(Exception, "No recording"):
+            recording.forget(self.instance, "link")
+        self.assertEqual(sentinel.read_text(), "keep")
+        self.assertTrue((root / "link").is_symlink())
+
+    def test_forget_refuses_the_active_recording(self):
+        directory = recording.recordings_root(self.instance) / "current"
+        directory.mkdir(parents=True)
+        with patch.object(recording, "active", return_value={"name": "current"}):
+            with self.assertRaisesRegex(Exception, "active"):
+                recording.forget(self.instance, "current")
+        self.assertTrue(directory.is_dir())
 
     def test_status_without_a_recording_lists_kept_names(self):
         (recording.recordings_root(self.instance) / "kept").mkdir(parents=True)

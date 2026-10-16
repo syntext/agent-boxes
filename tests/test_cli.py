@@ -49,6 +49,15 @@ class PassThroughTests(unittest.TestCase):
 
 
 class ListTests(unittest.TestCase):
+    def test_list_does_not_require_a_browser_registry_entry(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.dict(os.environ, {"BOXES_STATE_DIR": temporary + "/state", "BOXES_DATA_DIR": temporary + "/data"}), \
+                patch.object(cli, "registry", return_value={"bambu": cli.box_type("bambu")}), \
+                patch.object(cli, "box_type", side_effect=AssertionError("list must use the registry")), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(cli.main(["list", "--json"]), 0)
+        self.assertEqual(json.loads(output.getvalue()), [])
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         directory = Path(self.temporary.name)

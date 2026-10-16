@@ -86,7 +86,7 @@ def now():
     return time.time()
 
 
-def clamp_scroll(value):
+def scroll_count(value):
     """A wheel repeat count. The desktop protocol sends 1 to 64, or 0 for none."""
     try:
         value = int(value)
@@ -299,7 +299,7 @@ class Sniffer:
                 x, y, mask, scroll = (int(value) for value in fields[1:5])
             except ValueError:
                 return
-            self.translator.pointer(x, y, mask, clamp_scroll(scroll), relative=kind == "m2")
+            self.translator.pointer(x, y, mask, scroll_count(scroll), relative=kind == "m2")
 
     def deliver(self, connection_id, sequence, data):
         """Place in-order bytes, drain any that waited for them, then decode.
@@ -328,8 +328,9 @@ class Sniffer:
         held["next"] = sequence + len(data)
         held["progress"] = moment
         while held["next"] in held["pending"]:
-            held["buffer"] += held["pending"].pop(held["next"])
-            held["next"] += len(held["buffer"])
+            chunk = held["pending"].pop(held["next"])
+            held["buffer"] += chunk
+            held["next"] += len(chunk)
         self.decode(held)
 
     def recover(self, connection_id, held, moment):
@@ -426,12 +427,7 @@ class Sniffer:
             sock.close()
 
 
-def stop_handler(stopping):
-    """Finish cleanly when the host stops the recording.
-
-    Without this, SIGTERM would kill the process outright, losing the text of a
-    word still being typed and the marker that says the segment ended.
-    """
+def install_stop_handlers(stopping):
     def handle(*_arguments):
         stopping["asked"] = True
     signal.signal(signal.SIGTERM, handle)
@@ -451,10 +447,10 @@ def main():
         print(json.dumps({"time": round(now(), 3), "event": event, **fields}, separators=(",", ":")), flush=True)
 
     stopping = {"asked": False}
-    stop_handler(stopping)
+    install_stop_handlers(stopping)
     sniffer = Sniffer(arguments.interface, emit, arguments.port)
     opening = sniffer.open()
-    open_socket(arguments.drop_to)
+    drop_privileges(arguments.drop_to)
     if not opening:
         print("tap: no usable interface; only video will be recorded", file=sys.stderr)
         return 2
@@ -469,7 +465,7 @@ def main():
     return 0
 
 
-def open_socket(account):
+def drop_privileges(account):
     """Become the desktop account, so logs and frames stay owned by it.
 
     Opening an `AF_PACKET` socket needs a capability the desktop account does not
