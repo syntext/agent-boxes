@@ -25,6 +25,7 @@ For an instance name that also names an agent or mount action, `--` follows the 
 "$BOXES_ROOT/box" up "$TYPE" "$NAME"
 "$BOXES_ROOT/box" list
 "$BOXES_ROOT/box" list --json
+"$BOXES_ROOT/box" list --json --no-password
 "$BOXES_ROOT/box" status --json
 "$BOXES_ROOT/box" status "$TYPE" "$NAME" --json
 "$BOXES_ROOT/box" url "$TYPE" "$NAME"
@@ -57,15 +58,26 @@ For an instance name that also names an agent or mount action, `--` follows the 
 
 ### List and status output
 
-`list` prints an aligned table with one row per saved box. The columns are type, name, state, bind address, host port, and URL. An unassigned value appears as `-`. A stopped or absent box shows its saved port even though nothing listens on it.
+`list` prints an aligned table with one row per saved box. The columns are type, name, state, bind address, host port, URL, and password. An unassigned value appears as `-`. A stopped or absent box shows its saved port even though nothing listens on it.
 
-`list --json` and `status --json` provide machine-readable output. Status and list output never include the password. `status` reports the location of the private `instance.json` file.
+`list --json` and `status --json` provide machine-readable output. `list` includes each box's Basic Auth password; `--no-password` removes the column and the JSON field, so that output is safe to share. `status` never includes credentials and reports the location of the private `instance.json` file.
 
 ## Human access and TLS
 
 ### Account and credentials
 
-Each box has one account named `box`. `up`, `recreate`, and `update` accept `--password` to replace its password. Omitting the option retains saved credentials. A new box without the option receives a random password.
+Each box has one account named `box`. `up`, `recreate`, and `update` accept `--password` to replace its password. Omitting the option retains saved credentials. A new box without the option takes the default password from `${XDG_STATE_HOME:-~/.local/state}/boxes/.passwd`, or receives a random password when that file does not exist.
+
+The default password file holds one password on its own line and is read only when a box is first created. `BOXES_PASSWORD_FILE` names a different path. Written passwords must be nonempty and free of control characters, must not begin with a hyphen, and the file must not be readable by group or others.
+
+```sh
+PASSWORD_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/boxes/.passwd"
+mkdir -p "$(dirname "$PASSWORD_FILE")"
+printf '%s\n' '<your-password>' > "$PASSWORD_FILE"
+chmod 600 "$PASSWORD_FILE"
+```
+
+An existing box keeps its saved password when the file appears or changes. Use `--password` to replace it.
 
 Empty passwords, control characters, and a leading hyphen are rejected. The upstream image passes the password to `openssl passwd`, which reads a leading hyphen as an option and leaves the box unreachable. Password arguments are visible in shell history and host process listings.
 

@@ -7,14 +7,15 @@ from pathlib import Path
 import sys
 
 from . import agent, recording, runtime
-from .model import BoxError, Instance, box_type, env_pair, host_bind, mount, registry, validate_mounts
+from .model import BoxError, Instance, box_type, env_pair, host_bind, mount, registry, validate_mounts, validate_password
 
 
 def parser():
     root = argparse.ArgumentParser(description="Persistent LinuxServer desktops with authenticated agent control.")
     commands = root.add_subparsers(dest="command", required=True)
-    listing = commands.add_parser("list", help="List saved instances without credentials")
+    listing = commands.add_parser("list", help="List saved instances and their credentials")
     listing.add_argument("--json", action="store_true")
+    listing.add_argument("--no-password", action="store_true", help="Omit passwords from output that may be shared")
     usages = {"exec": "box exec TYPE [NAME] -- ARGS...", "adb": "box adb TYPE [NAME] -- ARGS...",
               "record": "box record TYPE [NAME] {start,stop,pause,resume,status,list,forget}",
               "lessons": "box lessons TYPE [NAME] {list,path,show,record}"}
@@ -55,20 +56,20 @@ def table(values):
     if not values:
         print("No boxes.")
         return
-    rows = [("TYPE", "NAME", "STATE", "BIND", "PORT", "URL")]
-    rows += [(v["type"], v["name"], v["state"], v["bind"], str(v["port"] or "-"), v["url"] or "-") for v in values]
-    widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
-    for row in rows:
+    headings = ["TYPE", "NAME", "STATE", "BIND", "PORT", "URL"]
+    rows = [[v["type"], v["name"], v["state"], v["bind"], str(v["port"] or "-"), v["url"] or "-"] for v in values]
+    if "password" in values[0]:
+        headings.append("PASSWORD")
+        for row, value in zip(rows, values):
+            row.append(value["password"])
+    widths = [max(len(row[column]) for row in [headings, *rows]) for column in range(len(headings))]
+    for row in [headings, *rows]:
         print("  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip())
 
 
 def configure(args, config):
     if args.password is not None:
-        if not args.password or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in args.password):
-            raise BoxError("--password must be nonempty and contain no control characters.")
-        if args.password.startswith("-"):
-            raise BoxError("--password must not begin with a hyphen.")
-        config["password"] = args.password
+        config["password"] = validate_password(args.password)
     if not 1 <= args.wait <= 900:
         raise BoxError("--wait must be between 1 and 900 seconds.")
     for key in ("bind", "port", "image", "http", "tls_verify"):
@@ -233,7 +234,11 @@ def main(argv=None):
                 for path in sorted((sample.state_root / kind.name).glob("*/instance.json")):
                     instance = Instance(kind, path.parent.name)
                     with instance.lock():
-                        results.append(runtime.status(instance, instance.load()))
+                        config = instance.load()
+                        entry = runtime.status(instance, config)
+                        if not args.no_password:
+                            entry["password"] = config["password"]
+                        results.append(entry)
             if args.json:
                 output(results)
             else:
@@ -265,7 +270,7 @@ def main(argv=None):
                     table([value])
             elif command == "login":
                 if not sys.stdout.isatty():
-                    raise BoxError("Login prints a password only to a terminal. Read the private instance.json directly for automation.")
+                    raise BoxError("Login prints a password only to a terminal. Use box list, or read the private instance.json, for automation.")
                 print(f"User {config['user']}\nPassword {config['password']}")
             elif command in {"start", "stop", "restart"}:
                 container = runtime.inspect(instance)

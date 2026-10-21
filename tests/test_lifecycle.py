@@ -22,6 +22,7 @@ class LifecycleTests(unittest.TestCase):
             "BOXES_STATE_DIR": str(self.root / "state"),
             "BOXES_DATA_DIR": str(self.root / "data"),
             "BOXES_PROJECT_PREFIX": "boxes-test-review",
+            "BOXES_PASSWORD_FILE": str(self.root / "state/.passwd"),
         })
         self.environment.start()
         self.instance = Instance(box_type("browser"))
@@ -66,6 +67,15 @@ class LifecycleTests(unittest.TestCase):
         cli.configure(cli.parser().parse_args(["up", "browser", "other"]), other)
         self.assertTrue(bool(original) and other["password"] == original)
         self.assertTrue(original != self.config["password"])
+
+    def test_existing_instance_keeps_its_password_when_the_default_file_appears(self):
+        path = Path(os.environ["BOXES_PASSWORD_FILE"])
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path.write_text("fixture-shared-password\n")
+        path.chmod(0o600)
+        self.assertEqual(self.instance.load()["password"], self.config["password"])
+        self.assertEqual(Instance(box_type("browser"), "later").load(create=True)["password"],
+                         "fixture-shared-password")
 
     def test_invalid_password_is_rejected_without_echo_or_saved_change(self):
         for password in ("", "fixture\nsecret", "fixture\x00secret", "fixture\x7fsecret", "fixture\x85secret"):

@@ -6,7 +6,7 @@ Read `registry.json` and `runtime.json` before changing app lifecycle behavior. 
 
 Keep this file and the root README box-agnostic. Discover types through `registry.json` instead of listing the current catalog. Put application requirements, setup, and specialized commands in each type's README and skill. Use a selected registry key in shared command examples.
 
-Use argument lists for subprocesses. Do not add shell evaluation. Treat state files as private because they include credentials. Never print them in status, logs, tests, or review output.
+Use argument lists for subprocesses. Do not add shell evaluation. Treat state files as private because they include credentials. Never print them in status, logs, tests, or review output. `box list` is the deliberate exception for people reading their own boxes; `--no-password` keeps that output shareable.
 
 Keep each instance's writes under its own file lock. Use atomic replacement for saved configuration. Do not introduce a global mutable instance registry. Retain data by default.
 

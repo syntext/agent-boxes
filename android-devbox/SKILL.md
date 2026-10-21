@@ -12,7 +12,7 @@ BOXES_SKILL_BASE='<skill-base>'
 BOXES_ROOT="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().parent)' "$BOXES_SKILL_BASE")"
 ```
 
-Run `"$BOXES_ROOT/box"` from any working directory. Start the desktop with `"$BOXES_ROOT/box" up android NAME`. Omit `--password` to preserve saved credentials or generate a random password for a new box. Read [the Android reference](README.md) before SDK provisioning.
+Run `"$BOXES_ROOT/box"` from any working directory. Start the desktop with `"$BOXES_ROOT/box" up android NAME`. Omit `--password` to preserve saved credentials or generate a random password for a new box; `BOXES_STATE_DIR/.passwd` supplies the default instead. Read [the Android reference](README.md) before SDK provisioning.
 
 Use type `android`. Run `"$BOXES_ROOT/box" emu android NAME status` before starting an emulator. Start it only when the task needs Android. Use `"$BOXES_ROOT/box" emu android NAME start --wait 240` for a bounded boot check. Use `"$BOXES_ROOT/box" adb android NAME -- shell getprop sys.boot_completed` to check Android itself. Always include `--` before adb arguments. Omit `NAME` to use `default`.
 

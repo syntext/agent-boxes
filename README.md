@@ -44,7 +44,7 @@ NAME=research
 "$BOXES_ROOT/box" login "$TYPE" "$NAME"
 ```
 
-Open the printed HTTPS URL. Sign in with the credentials that `login` shows in your terminal. New boxes receive a random password. Repeating `up` without `--password` preserves saved credentials. First startup can take several minutes while the image installs utilities.
+Open the printed HTTPS URL. Sign in with the credentials that `login` shows in your terminal. New boxes receive a random password. A `.passwd` file in the state directory supplies a default instead, and `box list` shows each box's password. Repeating `up` without `--password` preserves saved credentials. First startup can take several minutes while the image installs utilities.
 
 The upstream certificate is self-signed, so your browser shows a certificate warning. Proceed only for a host you trust. HTTPS provides the secure context that the web viewer requires away from localhost.
 

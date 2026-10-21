@@ -14,15 +14,15 @@ BOXES_ROOT="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.a
 
 Use `"$BOXES_ROOT/box"` from any working directory. No PATH entry or global CLI shim is needed. Read [the root reference](README.md) for options and security boundaries. Read the [browser](browser-box/SKILL.md), [Android](android-devbox/SKILL.md), or [Bambu Studio](bambustudio-box/SKILL.md) skill for app-specific commands.
 
-1. Select a type and instance name. Run `"$BOXES_ROOT/box" status TYPE NAME --json` or `"$BOXES_ROOT/box" list --json` before changing it.
-2. Start it with `"$BOXES_ROOT/box" up TYPE NAME` when needed. Omit `--password` to preserve saved credentials or generate a random password for a new box. A new Android desktop does not start an emulator.
+1. Select a type and instance name. Run `"$BOXES_ROOT/box" status TYPE NAME --json` or `"$BOXES_ROOT/box" list --json --no-password` before changing it.
+2. Start it with `"$BOXES_ROOT/box" up TYPE NAME` when needed. Omit `--password` to preserve saved credentials or generate a random password for a new box. A `.passwd` file in `BOXES_STATE_DIR` supplies a default password for new boxes instead. A new Android desktop does not start an emulator.
 3. Run `"$BOXES_ROOT/box" agent TYPE NAME state` and take a screenshot with `"$BOXES_ROOT/box" agent TYPE NAME screenshot --output /absolute/path.png`. Read the image before choosing coordinates.
 4. Send one deliberate action with `move`, `click`, `key`, `text`, or `scroll`. Read fresh state or a screenshot to verify the result. Input completion is asynchronous.
 5. Use `"$BOXES_ROOT/box" exec TYPE NAME -- COMMAND ARG...` for explicit noninteractive work. Use `shell` only for an interactive terminal.
 
 The human and agent share one pointer, keyboard, and focus. Pause when the human takes over. Resume only after agreement. Do not compete with another agent's input.
 
-Use stdin for sensitive text. Do not print `instance.json`, credentials, cookies, or private environment values. Use `"$BOXES_ROOT/box" login` only when a human requests credentials at a terminal. Never embed credentials in a URL.
+Use stdin for sensitive text. Do not print `instance.json`, credentials, cookies, or private environment values. Use `"$BOXES_ROOT/box" login` only when a human requests credentials at a terminal. Never embed credentials in a URL. `"$BOXES_ROOT/box" list` includes each box's password, so pass `--no-password` before pasting or quoting that output.
 
 Save application work before mount changes, update, or recreation. Those operations replace the desktop container. Do not purge data without explicit permission. Do not touch sibling legacy projects or containers.
 
@@ -67,8 +67,8 @@ recording of a box nobody is viewing still captures the screen, but the tap only
 sees input that arrives over the box's own viewer connection, so ask the human to
 work in that viewer.
 
-State can omit menus and custom-rendered content. Use screenshots rather than inventing missing elements. `cursor_position` is unsupported: Pelorus returns HTTP 500 for any computer-use response that omits `result`, which `cursor_position` does. Do not report it as supported. Send a drag with `coordinate`; the upstream contract's `end_coordinate` field is ignored. Pelorus requests use the authenticated viewer port, which serves HTTPS unless the box was started with `--http`; an HTTP box's web client only renders from `http://localhost`. Do not publish raw control ports or configure model credentials. A new box listens on every host IPv4 interface. Pass `--bind 127.0.0.1` when the human wants loopback only. `"$BOXES_ROOT/box" list` shows each box's bind address, port, and URL.
+State can omit menus and custom-rendered content. Use screenshots rather than inventing missing elements. `cursor_position` is unsupported: Pelorus returns HTTP 500 for any computer-use response that omits `result`, which `cursor_position` does. Do not report it as supported. Send a drag with `coordinate`; the upstream contract's `end_coordinate` field is ignored. Pelorus requests use the authenticated viewer port, which serves HTTPS unless the box was started with `--http`; an HTTP box's web client only renders from `http://localhost`. Do not publish raw control ports or configure model credentials. A new box listens on every host IPv4 interface. Pass `--bind 127.0.0.1` when the human wants loopback only. `"$BOXES_ROOT/box" list` shows each box's bind address, port, URL, and password.
 
 One global `~/.config/opencode/skills/boxes` link to this repository root registers this skill and its nested children. Do not create or change global skill links unless asked.
 
-Each box keeps one account named `box`. Password arguments are visible in shell history and host process listings. Omitting `--password` retains saved credentials or generates a random password for a new box.
+Each box keeps one account named `box`. Password arguments are visible in shell history and host process listings. Omitting `--password` retains saved credentials or generates a random password for a new box, unless `BOXES_STATE_DIR/.passwd` supplies the default.

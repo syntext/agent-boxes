@@ -62,7 +62,8 @@ class ListTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         directory = Path(self.temporary.name)
         self.environment = patch.dict(os.environ, {"BOXES_STATE_DIR": str(directory / "state"),
-                                                  "BOXES_DATA_DIR": str(directory / "data")})
+                                                   "BOXES_DATA_DIR": str(directory / "data"),
+                                                   "BOXES_PASSWORD_FILE": str(directory / "state/.passwd")})
         self.environment.start()
 
     def tearDown(self):
@@ -75,19 +76,29 @@ class ListTests(unittest.TestCase):
             self.assertEqual(cli.main(["list", *options]), 0)
         return stdout.getvalue()
 
-    def test_list_shows_bind_port_and_url_without_password(self):
+    def test_list_shows_credentials_with_an_opt_out(self):
         with patch("boxes.runtime.socket.gethostname", return_value="desktop-host"):
+            credentials = {}
             for name, bind, port in (("open", "0.0.0.0", 41001), ("local", "127.0.0.1", None)):
                 instance = cli.Instance(cli.box_type("browser"), name)
                 config = instance.load(create=True)
                 config.update(bind=bind, published_port=port)
                 instance.save(config)
+                credentials[name] = config["password"]
             plain = self.run_list()
             listed = self.run_list("--json")
-        self.assertEqual(plain.splitlines(), [
+            hidden = self.run_list("--no-password")
+            hidden_json = self.run_list("--json", "--no-password")
+        self.assertEqual([line.split() for line in plain.splitlines()], [
+            ["TYPE", "NAME", "STATE", "BIND", "PORT", "URL", "PASSWORD"],
+            ["browser", "local", "absent", "127.0.0.1", "-", "-", credentials["local"]],
+            ["browser", "open", "absent", "0.0.0.0", "41001", "https://desktop-host:41001/", credentials["open"]]])
+        self.assertEqual([(value["bind"], value["port"]) for value in json.loads(listed)],
+                         [("127.0.0.1", None), ("0.0.0.0", 41001)])
+        self.assertEqual([value["password"] for value in json.loads(listed)],
+                         [credentials["local"], credentials["open"]])
+        self.assertEqual(hidden.splitlines(), [
             "TYPE     NAME   STATE   BIND       PORT   URL",
             "browser  local  absent  127.0.0.1  -      -",
             "browser  open   absent  0.0.0.0    41001  https://desktop-host:41001/"])
-        self.assertEqual([(value["bind"], value["port"]) for value in json.loads(listed)],
-                         [("127.0.0.1", None), ("0.0.0.0", 41001)])
-        self.assertNotIn(config["password"], plain + listed)
+        self.assertTrue(all("password" not in value for value in json.loads(hidden_json)))

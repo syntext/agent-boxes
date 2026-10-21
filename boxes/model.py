@@ -60,6 +60,36 @@ def new_password() -> str:
             return value
 
 
+def validate_password(value: str, source: str = "--password") -> str:
+    if not value or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in value):
+        raise BoxError(f"{source} must be nonempty and contain no control characters.")
+    if value.startswith("-"):
+        raise BoxError(f"{source} must not begin with a hyphen.")
+    return value
+
+
+def password_file(state_root: Path) -> Path:
+    override = os.environ.get("BOXES_PASSWORD_FILE")
+    return Path(override).expanduser() if override else state_root / ".passwd"
+
+
+def default_password(state_root: Path) -> str:
+    path = password_file(state_root)
+    if not path.exists():
+        if path.is_symlink():
+            raise BoxError(f"{path} is a broken symbolic link.")
+        return new_password()
+    if path.is_dir():
+        raise BoxError(f"{path} is a directory. Write the password to a file instead.")
+    if path.stat().st_mode & 0o077:
+        raise BoxError(f"{path} is readable by other users. Run: chmod 600 {path}")
+    try:
+        value = path.read_text()
+    except (OSError, UnicodeDecodeError) as error:
+        raise BoxError(f"Cannot read {path}: {error}.") from error
+    return validate_password(value.removesuffix("\n").removesuffix("\r"), str(path))
+
+
 def scheme(config: dict) -> str:
     return "http" if config.get("http", False) else "https"
 
@@ -194,7 +224,7 @@ class Instance:
         value = {"version": 1, "type": self.kind.name, "name": self.name,
                  "data": str(self.data), "bind": "0.0.0.0", "port": None,
                  "environment": {}, "mounts": [], "image": None,
-                 "user": "box", "password": new_password(),
+                 "user": "box", "password": default_password(self.state_root),
                  "tls_verify": False, "http": False, "published_port": None}
         self.save(value)
         return value

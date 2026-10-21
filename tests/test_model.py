@@ -7,7 +7,8 @@ import unittest
 from unittest.mock import patch
 
 from boxes.cli import configure, parser
-from boxes.model import BoxError, Instance, atomic_json, box_type, env_pair, mount, new_password, validate_mounts
+from boxes.model import (BoxError, Instance, atomic_json, box_type, env_pair, mount, new_password, password_file,
+                         validate_mounts)
 from boxes.runtime import inspect
 
 
@@ -21,8 +22,16 @@ class ModelTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.directory = Path(self.temporary.name)
         self.environment = patch.dict(os.environ, {"BOXES_STATE_DIR": str(self.directory / "state"),
-                                                  "BOXES_DATA_DIR": str(self.directory / "data")})
+                                                  "BOXES_DATA_DIR": str(self.directory / "data"),
+                                                  "BOXES_PASSWORD_FILE": str(self.directory / "state/.passwd")})
         self.environment.start()
+
+    def write_password_file(self, content):
+        path = Path(os.environ["BOXES_PASSWORD_FILE"])
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path.write_text(content)
+        path.chmod(0o600)
+        return path
 
     def tearDown(self):
         self.environment.stop()
@@ -45,6 +54,50 @@ class ModelTests(unittest.TestCase):
         with patch("boxes.model.secrets.token_urlsafe", side_effect=["-openssl-option", "-again", "usable"]):
             self.assertEqual(new_password(), "usable")
         self.assertFalse(new_password().startswith("-"))
+
+    def test_password_file_defaults_to_the_state_root(self):
+        with patch.dict(os.environ, {"BOXES_PASSWORD_FILE": ""}):
+            self.assertEqual(password_file(self.directory / "state"), self.directory / "state/.passwd")
+
+    def test_password_file_supplies_the_default_for_a_new_instance(self):
+        self.write_password_file("fixture-shared-password\n")
+        self.assertEqual(Instance(box_type("browser"), "shared").load(create=True)["password"],
+                         "fixture-shared-password")
+
+    def test_password_option_replaces_the_password_file_default(self):
+        self.write_password_file("fixture-shared-password\n")
+        instance = Instance(box_type("browser"), "shared")
+        config = instance.load(create=True)
+        configure(parser().parse_args(["up", "browser", "shared", "--password", "fixture-option-password"]), config)
+        self.assertEqual(config["password"], "fixture-option-password")
+
+    def test_password_file_must_be_private(self):
+        path = self.write_password_file("fixture-shared-password\n")
+        path.chmod(0o644)
+        with self.assertRaisesRegex(BoxError, r"readable by other users\. Run: chmod 600 ") as error:
+            Instance(box_type("browser"), "shared").load(create=True)
+        self.assertNotIn("fixture-shared-password", str(error.exception))
+
+    def test_password_file_is_validated_without_echo(self):
+        for content in ("", "\n", "fixture\nsecret\n", "-fixture\n", "fixture\x85secret\n"):
+            path = self.write_password_file(content)
+            with self.subTest(content=content), self.assertRaises(BoxError) as error:
+                Instance(box_type("browser"), "shared").load(create=True)
+            self.assertIn(str(path), str(error.exception))
+            self.assertNotIn("fixture", str(error.exception))
+
+    def test_password_file_directory_is_rejected(self):
+        path = Path(os.environ["BOXES_PASSWORD_FILE"])
+        path.mkdir(parents=True, mode=0o700)
+        with self.assertRaisesRegex(BoxError, r"is a directory"):
+            Instance(box_type("browser"), "shared").load(create=True)
+
+    def test_password_file_broken_symlink_is_rejected(self):
+        path = Path(os.environ["BOXES_PASSWORD_FILE"])
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path.symlink_to(path.parent / "missing-password")
+        with self.assertRaisesRegex(BoxError, r"is a broken symbolic link\."):
+            Instance(box_type("browser"), "shared").load(create=True)
 
     def test_http_is_opt_in_and_new_instances_use_https(self):
         instance = Instance(box_type("browser"), "plain")
