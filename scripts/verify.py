@@ -240,9 +240,8 @@ def main():
             for operation in (("move", "600", "400"), ("key", "Escape")):
                 result = box("agent", kind, "first", *operation)
                 check(f"{kind} input {' '.join(operation)}", result["result"] == "ok")
-            drag = box("agent", kind, "first", "control",
-                       '{"action":"left_click_drag","start_coordinate":[600,400],"coordinate":[700,500]}')
-            check(f"{kind} input left_click_drag", drag["result"] == "ok")
+            drag = box("agent", kind, "first", "drag", "600", "400", "700", "500")
+            check(f"{kind} input drag", drag["result"] == "ok")
             subprocess.run(["docker", "cp", str(ROOT / "scripts/terminal_input.py"),
                             f'{status["project"]}:/work/boxes-terminal-input.py'], check=True, capture_output=True)
             box("exec", kind, "first", "--", "python3", "/work/boxes-terminal-input.py",

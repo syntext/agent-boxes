@@ -16,7 +16,7 @@ Run `"$BOXES_ROOT/box"` from any working directory. Start the desktop with `"$BO
 
 Use type `browser`. Choose a named instance for an isolated profile. Chromium profile data persists in `/config`. User files belong in `/work`.
 
-Navigate with `"$BOXES_ROOT/box" agent browser NAME key ctrl+l`, send the URL with `text`, and press `Return`. Inspect a fresh screenshot after navigation. Do not enable a public CDP port. Use the stock desktop API unless the task explicitly requires a different integration.
+Navigate with `"$BOXES_ROOT/box" agent browser NAME key ctrl+l`, send the URL with `text`, and press `Return`. Inspect a fresh screenshot after navigation. Drag with `"$BOXES_ROOT/box" agent browser NAME drag X1 Y1 X2 Y2` for sliders, map panning, tab reordering, and pages that accept a dropped element; moving and clicking separately does not start a drag. Do not enable a public CDP port. Use the stock desktop API unless the task explicitly requires a different integration.
 
 Read [the browser reference](README.md) for startup settings. Preserve the user's existing tabs, credentials, and downloads. Ask before external submissions or account changes.
 

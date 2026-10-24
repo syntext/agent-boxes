@@ -20,7 +20,7 @@ The desktop starts without an emulator. Stop it with `"$BOXES_ROOT/box" emu andr
 
 SDK and AVD data are private to `/config`. Never point a new instance at a legacy live writable SDK or AVD directory. Use a read-only seed and a private copy. SDK license acceptance is a legal decision. Do not pass `--accept-licenses` unless the user explicitly authorized that acceptance.
 
-Use `"$BOXES_ROOT/box" agent android NAME screenshot --output /absolute/path.png` for the shared desktop. Use adb for Android app commands. Verify that boot completed before installing or launching an app.
+Use `"$BOXES_ROOT/box" agent android NAME screenshot --output /absolute/path.png` for the shared desktop. Swipe and long-press-drag with `"$BOXES_ROOT/box" agent android NAME drag X1 Y1 X2 Y2`. Use adb for Android app commands. Verify that boot completed before installing or launching an app.
 
 ## Recording and lessons
 

@@ -60,15 +60,18 @@ This generally keeps interaction responsive on a local or private network. That 
 
 ## Agent control
 
-An agent works on the same desktop through the box's authenticated port. It can read the current state and window list, take a screenshot, and send one move, click, key, text, or scroll action at a time.
+An agent works on the same desktop through the box's authenticated port. It can read the current state and window list, take a screenshot, and send move, click, key, text, scroll, or drag input.
 
 ```sh
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" state
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" screenshot --output /absolute/screen.png
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" click 600 400
+"$BOXES_ROOT/box" agent "$TYPE" "$NAME" drag 400 300 900 300
 printf '%s' 'example text' | "$BOXES_ROOT/box" agent "$TYPE" "$NAME" text
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" key Return
 ```
+
+`drag` holds the left button and moves in steps to the destination before it releases. That is what native drag-and-drop targets, sliders, and 3D views need; a single pointer jump starts a browser drag and cancels it before a drop target sees it.
 
 The human and the agent share one pointer, keyboard, and focus. An agent pauses while you take over, and it does not send input that competes with yours. Input is asynchronous, so an agent reads fresh state or a screenshot before the next action rather than assuming the previous one landed. The [agent control reference](USAGE.md#agent-control) lists every action, the API endpoints, and the known limits.
 

@@ -164,13 +164,17 @@ Environment defaults merge from [runtime.json](runtime.json), then the type's re
 printf '%s' 'example text' | "$BOXES_ROOT/box" agent "$TYPE" "$NAME" text
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" key Return
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" scroll down 3
+"$BOXES_ROOT/box" agent "$TYPE" "$NAME" drag 400 300 900 300
+"$BOXES_ROOT/box" agent "$TYPE" "$NAME" drag 400 300 900 300 --steps 20 --interval-ms 30 --settle-ms 250
 "$BOXES_ROOT/box" agent "$TYPE" "$NAME" explore 1234
-"$BOXES_ROOT/box" agent "$TYPE" "$NAME" control '{"action":"left_click_drag","start_coordinate":[100,100],"coordinate":[300,300]}'
+"$BOXES_ROOT/box" agent "$TYPE" "$NAME" control '{"action":"triple_click","coordinate":[600,400]}'
 ```
 
 These commands use the upstream `/pelorus/api/state`, `/windows`, `/desktop/screenshot`, `/desktop/explore/{pid}`, and `/desktop/control` endpoints through the authenticated viewer port. `explore` requires the target process ID. Click buttons include `left`, `right`, `middle`, and `double`.
 
 `screenshot` without `--output` returns the upstream base64 JSON. `text` without an argument reads stdin. A positional text argument is visible to host process inspection and is unsuitable for secrets.
+
+`drag` holds the left button and moves from `X1 Y1` to `X2 Y2` in steps, waits at the destination, then releases. `--steps` accepts 1 to 200, `--interval-ms` 0 to 1000, and `--settle-ms` 0 to 5000. The defaults are 10 steps, a 20 millisecond pause after each move, and a 150 millisecond hold before release. A drag needs that motion: the backend's own `left_click_drag` action jumps between the points and releases at once, so Chromium starts a drag and cancels it before a drop target sees the pointer. Use `drag` for drag-and-drop, sliders, canvas and 3D views, and window moves. The backend exposes only `left_mouse_down` and `left_mouse_up`, so right and middle drags are unavailable. A failed drag still releases the button on a best-effort basis.
 
 `control` sends the payload to Pelorus unchanged. The computer-use backend's field names determine behavior. The upstream contract declares `end_coordinate` for drags, but the backend reads `coordinate`.
 

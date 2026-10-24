@@ -1,4 +1,5 @@
 import base64
+import contextlib
 import http.client
 import json
 import ssl
@@ -49,6 +50,36 @@ def request(instance, config, endpoint, payload=None):
     if isinstance(result, dict) and (result.get("error") or result.get("result") in {"error", "failed"}):
         raise BoxError(f"Pelorus rejected the action. {result}")
     return result
+
+
+def drag(instance, config, start, end, steps=10, interval=0.02, settle=0.15):
+    """Hold the left button and move between two points, then release.
+
+    The computer-use backend has no working one-shot drag for drag-and-drop
+    targets: Chromium starts the drag and cancels it before the target sees it.
+    Stepped moves with a pause at the destination make the target register the
+    pointer before the release.
+    """
+    if not 1 <= steps <= 200:
+        raise BoxError("Drag steps must be between 1 and 200.")
+    if not 0 <= interval <= 1:
+        raise BoxError("Drag interval must be between 0 and 1 second.")
+    if not 0 <= settle <= 5:
+        raise BoxError("Drag settle must be between 0 and 5 seconds.")
+    (x1, y1), (x2, y2) = start, end
+    request(instance, config, "desktop/control", {"action": "mouse_move", "coordinate": [x1, y1]})
+    try:
+        request(instance, config, "desktop/control", {"action": "left_mouse_down"})
+        for step in range(1, steps + 1):
+            point = [round(x1 + (x2 - x1) * step / steps), round(y1 + (y2 - y1) * step / steps)]
+            request(instance, config, "desktop/control", {"action": "mouse_move", "coordinate": point})
+            time.sleep(interval)
+        time.sleep(settle)
+    except BaseException:
+        with contextlib.suppress(BoxError):
+            request(instance, config, "desktop/control", {"action": "left_mouse_up"})
+        raise
+    return request(instance, config, "desktop/control", {"action": "left_mouse_up"})
 
 
 def screenshot(instance, config, output):

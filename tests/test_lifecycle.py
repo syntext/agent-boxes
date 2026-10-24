@@ -294,5 +294,65 @@ class LifecycleTests(unittest.TestCase):
                          [urllib.request.ProxyHandler])
 
 
+class DragTests(unittest.TestCase):
+    def setUp(self):
+        self.instance = Instance(box_type("browser"))
+        self.config = {"bind": "127.0.0.1", "user": "box", "password": "box", "http": False, "tls_verify": False}
+
+    def record_requests(self, fail_at=None):
+        calls = []
+
+        def request(instance, config, endpoint, payload):
+            calls.append((endpoint, payload))
+            if fail_at is not None and len(calls) == fail_at:
+                raise BoxError("computer-use failed")
+            return {"result": "ok"}
+
+        return calls, request
+
+    def test_drag_moves_in_steps_and_releases_the_button(self):
+        calls, request = self.record_requests()
+        with patch.object(agent, "request", side_effect=request), patch.object(agent.time, "sleep") as sleep:
+            result = agent.drag(self.instance, self.config, (10, 20), (110, 220), steps=4, interval=0.02, settle=0.1)
+        self.assertEqual(result, {"result": "ok"})
+        self.assertEqual({endpoint for endpoint, _ in calls}, {"desktop/control"})
+        self.assertEqual([payload["action"] for _, payload in calls],
+                         ["mouse_move", "left_mouse_down", "mouse_move", "mouse_move", "mouse_move",
+                          "mouse_move", "left_mouse_up"])
+        self.assertEqual([payload["coordinate"] for _, payload in calls if payload["action"] == "mouse_move"],
+                         [[10, 20], [35, 70], [60, 120], [85, 170], [110, 220]])
+        self.assertEqual([call.args for call in sleep.call_args_list], [(0.02,)] * 4 + [(0.1,)])
+
+    def test_drag_releases_the_button_when_a_move_fails(self):
+        for fail_at, expected in ((4, ["mouse_move", "left_mouse_down", "mouse_move", "mouse_move", "left_mouse_up"]),
+                                  (2, ["mouse_move", "left_mouse_down", "left_mouse_up"])):
+            with self.subTest(fail_at=fail_at):
+                calls, request = self.record_requests(fail_at=fail_at)
+                with patch.object(agent, "request", side_effect=request), patch.object(agent.time, "sleep"), \
+                        self.assertRaisesRegex(BoxError, "computer-use failed"):
+                    agent.drag(self.instance, self.config, (0, 0), (40, 40), steps=4)
+                self.assertEqual([payload["action"] for _, payload in calls], expected)
+
+    def test_drag_rejects_out_of_range_options(self):
+        cases = [({"steps": 0}, "steps"), ({"steps": 201}, "steps"), ({"interval": -0.1}, "interval"),
+                 ({"interval": 1.1}, "interval"), ({"settle": -0.1}, "settle"), ({"settle": 5.1}, "settle")]
+        for options, name in cases:
+            with self.subTest(options=options), \
+                    patch.object(agent, "request", side_effect=AssertionError("no request expected")), \
+                    self.assertRaisesRegex(BoxError, name):
+                agent.drag(self.instance, self.config, (0, 0), (10, 10), **options)
+
+    def test_cli_drag_defaults_and_milliseconds(self):
+        with patch.object(cli.Instance, "load", return_value={}), \
+                patch.object(cli.agent, "drag", return_value={"result": "ok"}) as drag, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(["agent", "browser", "drag", "10", "20", "30", "40"]), 0)
+            self.assertEqual(drag.call_args.args[2:], ((10, 20), (30, 40), 10, 0.02, 0.15))
+            drag.reset_mock()
+            self.assertEqual(cli.main(["agent", "browser", "drag", "10", "20", "30", "40",
+                                       "--steps", "4", "--interval-ms", "30", "--settle-ms", "250"]), 0)
+            self.assertEqual(drag.call_args.args[2:], ((10, 20), (30, 40), 4, 0.03, 0.25))
+
+
 if __name__ == "__main__":
     unittest.main()

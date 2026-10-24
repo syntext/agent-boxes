@@ -133,6 +133,16 @@ def control(instance, config, arguments):
         item.add_argument("y", type=int)
         if name == "click":
             item.add_argument("--button", choices=["left", "right", "middle", "double"], default="left")
+    pull = sub.add_parser("drag", help="Hold the left button and drag from one point to another")
+    pull.add_argument("x1", type=int)
+    pull.add_argument("y1", type=int)
+    pull.add_argument("x2", type=int)
+    pull.add_argument("y2", type=int)
+    pull.add_argument("--steps", type=int, default=10, help="Intermediate pointer moves, 1 to 200")
+    pull.add_argument("--interval-ms", type=int, default=20, dest="interval",
+                      help="Pause after each move, 0 to 1000 milliseconds")
+    pull.add_argument("--settle-ms", type=int, default=150, dest="settle",
+                      help="Hold at the destination before release, 0 to 5000 milliseconds")
     for name in ("key", "text"):
         item = sub.add_parser(name)
         item.add_argument("text", nargs="?")
@@ -149,6 +159,9 @@ def control(instance, config, arguments):
         return agent.request(instance, config, f"desktop/explore/{args.pid}")
     if operation == "screenshot":
         return agent.screenshot(instance, config, args.output)
+    if operation == "drag":
+        return agent.drag(instance, config, (args.x1, args.y1), (args.x2, args.y2),
+                          args.steps, args.interval / 1000, args.settle / 1000)
     payload = {}
     if operation in {"move", "click"}:
         actions = {"left": "left_click", "right": "right_click", "middle": "middle_click", "double": "double_click"}
@@ -216,7 +229,8 @@ def main(argv=None):
         if boundary == 2:
             argv.insert(2, "default")
     default_actions = {
-        "agent": {"state", "windows", "screenshot", "explore", "move", "click", "key", "text", "scroll", "control"},
+        "agent": {"state", "windows", "screenshot", "explore", "move", "click", "drag", "key", "text", "scroll",
+                  "control"},
         "record": {"start", "stop", "pause", "resume", "status", "list", "forget"},
         "lessons": {"list", "path", "show", "record"},
         "mount": {"list", "set", "remove"}, "emu": {"start", "stop", "status"}}
